@@ -90,6 +90,11 @@ AB.customExitButton = {
 }
 
 function AB:PositionAndSizeBar(barName)
+	local bar = self.handledBars and self.handledBars[barName]
+	if not bar then
+		-- Unknown bar or not created yet; avoid nil-index crash
+		return
+	end
 	local buttonSpacing = E:Scale(self.db[barName].buttonspacing)
 	local backdropSpacing = E:Scale((self.db[barName].backdropSpacing or self.db[barName].buttonspacing))
 	local buttonsPerRow = self.db[barName].buttonsPerRow
@@ -100,8 +105,6 @@ function AB:PositionAndSizeBar(barName)
 	local widthMult = self.db[barName].widthMult
 	local heightMult = self.db[barName].heightMult
 	local visibility = self.db[barName].visibility
-	local bar = self.handledBars[barName]
-
 	bar.db = self.db[barName]
 
 	if visibility and match(visibility, "[\n\r]") then
