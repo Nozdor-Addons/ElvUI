@@ -1,273 +1,206 @@
--- ElvUI MicroBar (robust replacement v6: textures cropped, no squish, stable layout)
-local E, L, V, P, G = unpack(select(2, ...))
+local E, L, V, P, G = unpack(select(2, ...)); --Import: Engine, Locales, PrivateDB, ProfileDB, GlobalDB
 local AB = E:GetModule("ActionBars")
 
+--Lua functions
 local _G = _G
+local unpack = unpack
+local gsub, match = string.gsub, string.match
+--WoW API / Variables
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local RegisterStateDriver = RegisterStateDriver
 
--- Respect user's explicit list if present, else discover existing buttons
-local function GetMicroButtonsList()
-	if type(MICRO_BUTTONS) == "table" and #MICRO_BUTTONS > 0 then
-		return MICRO_BUTTONS
-	end
-	local candidates = {
-		"CharacterMicroButton","SpellbookMicroButton","TalentMicroButton",
-		"AchievementMicroButton","QuestLogMicroButton","SocialsMicroButton",
-		"PVPMicroButton","LFDMicroButton","HelpMicroButton","MainMenuMicroButton",
-		"GuildMicroButton","QuestLogMicroButton2","WorldMapMicroButton",
-		"CollectionsMicroButton","EncounterJournalMicroButton","StoreMicroButton",
-	}
-	local t = {}
-	for i = 1, #candidates do
-		local name = candidates[i]
-		if _G[name] then t[#t+1] = name end
-	end
-	return t
-end
+local MICRO_BUTTONS = {
+	"CharacterMicroButton",
+	"SpellbookMicroButton",
+	"TalentMicroButton",
+	"AchievementMicroButton",
+	"QuestLogMicroButton",
+	"SocialsMicroButton",
+	"PVPMicroButton",
+	"LFDMicroButton",
+	"EncounterJournalMicroButton",
+	"StoreMicroButton",
+	"MainMenuMicroButton"
+}
 
-local function getDB(self)
-	local db = (self and self.db and self.db.microbar) or {}
-	db.buttonSize = db.buttonSize or db.buttonsize or 20 -- desired width per button
-	db.buttonSpacing = db.buttonSpacing or db.buttonspacing or 2
-	db.buttonsPerRow = db.buttonsPerRow or db.buttonsperrow or 10
-	db.alpha = (db.alpha ~= nil) and db.alpha or 1
-	db.scale = db.scale or 1 -- entire bar scale
-	return db
-end
-
--- crop textures like ElvUI did for 3.3.5 micro buttons (icon is in lower half of atlas)
-local function CropTex(tex, backdrop)
-	if not tex then return end
-	if tex.SetTexCoord then
-		tex:SetTexCoord(0.17, 0.87, 0.5, 0.908)
+local function onEnter(button)
+	if AB.db.microbar.mouseover then
+		E:UIFrameFadeIn(ElvUI_MicroBar, 0.2, ElvUI_MicroBar:GetAlpha(), AB.db.microbar.alpha)
 	end
-	tex:ClearAllPoints()
-	if backdrop and backdrop.GetObjectType and backdrop:GetObjectType() then
-		tex:SetAllPoints(backdrop)
-	else
-		tex:SetAllPoints()
+
+	if button and button ~= ElvUI_MicroBar and button.backdrop then
+		button.backdrop:SetBackdropBorderColor(unpack(E.media.rgbvaluecolor))
 	end
 end
 
-local function HookButtonTextures(button)
-	if button._elv_hooked_tex then return end
-	button._elv_hooked_tex = true
-	local function reskin()
-		CropTex(button.GetNormalTexture and button:GetNormalTexture(), button.ElvBackdrop)
-		CropTex(button.GetPushedTexture and button:GetPushedTexture(), button.ElvBackdrop)
-		CropTex(button.GetDisabledTexture and button:GetDisabledTexture(), button.ElvBackdrop)
-		local hl = button.GetHighlightTexture and button:GetHighlightTexture()
-		CropTex(hl, button.ElvBackdrop)
-		if hl and hl.SetAlpha then hl:SetAlpha(0.25) end
+local function onLeave(button)
+	if AB.db.microbar.mouseover then
+		E:UIFrameFadeOut(ElvUI_MicroBar, 0.2, ElvUI_MicroBar:GetAlpha(), 0)
 	end
-	if hooksecurefunc then
-		hooksecurefunc(button, "SetNormalTexture", reskin)
-		hooksecurefunc(button, "SetPushedTexture", reskin)
-		hooksecurefunc(button, "SetDisabledTexture", reskin)
-		hooksecurefunc(button, "SetHighlightTexture", reskin)
+
+	if button and button ~= ElvUI_MicroBar and button.backdrop then
+		button.backdrop:SetBackdropBorderColor(unpack(E.media.bordercolor))
 	end
-	reskin()
 end
 
 function AB:HandleMicroButton(button)
 	if not button then return end
+local pushed = button:GetPushedTexture()
+	local normal = button:GetNormalTexture()
+	local disabled = button:GetDisabledTexture()
 
-	-- cache original size for proper aspect scaling
-	if not button._elv_baseW or not button._elv_baseH then
-		local bw, bh = button:GetSize()
-		button._elv_baseW = bw or 28
-		button._elv_baseH = bh or 58
-	end
+	
+	if not button._elv_baseW or not button._elv_baseH then local bw, bh = button:GetSize(); button._elv_baseW = bw or 28; button._elv_baseH = bh or 58; end
+local f = CreateFrame("Frame", nil, button)
+	f:SetFrameLevel(button:GetFrameLevel() - 1)
+	f:SetTemplate("Default", true)
+	f:SetOutside(button)
+	button.backdrop = f
 
-	-- backdrop
-	if not button.ElvBackdrop then
-		local f = CreateFrame("Frame", nil, button)
-		f:SetFrameLevel(button:GetFrameLevel() - 1)
-		if f.SetTemplate then f:SetTemplate("Default", true) end
-		f:ClearAllPoints()
-		f:SetPoint("TOPLEFT", button, "TOPLEFT", -1, 1)
-		f:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 1, -1)
-		button.ElvBackdrop = f
-	end
-
-	-- ensure textures look right and stay cropped
-	HookButtonTextures(button)
-
-	-- don't force width/height; scale preserves aspect
-	button:ClearAllPoints()
+	button:SetParent(ElvUI_MicroBar)
+	button:GetHighlightTexture():Kill()
+	button:HookScript("OnEnter", onEnter)
+	button:HookScript("OnLeave", onLeave)
+	button:SetHitRectInsets(0, 0, 0, 0)
 	button:Show()
-end
 
-local function HookIfExists(name, fn)
-	local f = _G[name]
-	if type(f) == "function" then
-		if hooksecurefunc then hooksecurefunc(name, fn) end
-		return true
+	pushed:SetTexCoord(0.17, 0.87, 0.5, 0.908)
+	pushed:SetInside(f)
+
+	normal:SetTexCoord(0.17, 0.87, 0.5, 0.908)
+	normal:SetInside(f)
+
+	if disabled then
+		disabled:SetTexCoord(0.17, 0.87, 0.5, 0.908)
+		disabled:SetInside(f)
 	end
 end
 
 function AB:UpdateMicroButtonsParent()
-	if not ElvUI_MicroBar then return end
-	local list = GetMicroButtonsList()
-	for i = 1, #list do
-		local b = _G[list[i]]
+		for i = 1, #MICRO_BUTTONS do
+		local b = _G[MICRO_BUTTONS[i]]
 		if b and b.SetParent then b:SetParent(ElvUI_MicroBar) end
 	end
+
+	AB:UpdateMicroPositionDimensions()
 end
 
 function AB:UpdateMicroBarVisibility()
-	if not ElvUI_MicroBar then return end
-	local db = getDB(self)
-
-	if db.enabled == false then
-		ElvUI_MicroBar:Hide()
+	if InCombatLockdown() then
+		AB.NeedsUpdateMicroBarVisibility = true
+		self:RegisterEvent("PLAYER_REGEN_ENABLED")
 		return
 	end
 
-	ElvUI_MicroBar:Show()
-
-	if db.mouseover and not ElvUI_MicroBar:IsMouseOver() then
-		ElvUI_MicroBar:SetAlpha(0)
-	else
-		ElvUI_MicroBar:SetAlpha(db.alpha)
+	local visibility = self.db.microbar.visibility
+	if visibility and match(visibility, "[\n\r]") then
+		visibility = gsub(visibility, "[\n\r]", "")
 	end
+
+	RegisterStateDriver(ElvUI_MicroBar.visibility, "visibility", (self.db.microbar.enabled and visibility) or "hide")
 end
 
 function AB:UpdateMicroPositionDimensions()
 	if not ElvUI_MicroBar then return end
-	local db = getDB(self)
-	local list = GetMicroButtonsList()
 
-	local bpr = db.buttonsPerRow or 10
-	local spacingInner = db.buttonSpacing or 2
-
+	local numRows = 1
+	local prevButton = ElvUI_MicroBar
 	local offset = E:Scale(E.PixelMode and 1 or 3)
-	local spacing = E:Scale(offset + spacingInner)
+	local spacing = E:Scale(offset + self.db.microbar.buttonSpacing)
 
-	local rows = {}
-	local row = 1; rows[1] = {width=0, maxH=0}
-	local col = 0
-	local prev = ElvUI_MicroBar
-
-	local maxWidth = 0
-
-	for i = 1, #list do
-		local button = _G[list[i]]
+	for i = 1, #MICRO_BUTTONS do
+		local button = _G[MICRO_BUTTONS[i]]
 		if button then
-			-- aspect-preserving scaling from desired width
-			local baseW = button._elv_baseW or (button.GetWidth and button:GetWidth()) or 28
-			local baseH = button._elv_baseH or (button.GetHeight and button:GetHeight()) or 58
-			local targetW = (db.buttonSize and db.buttonSize > 0) and db.buttonSize or baseW
-			local scale = targetW / baseW
-			button:SetScale(scale)
+		local lastColumnButton = i - self.db.microbar.buttonsPerRow
+		lastColumnButton = (lastColumnButton and lastColumnButton >= 1) and _G[MICRO_BUTTONS[lastColumnButton]] or nil
 
-			local bw, bh = baseW * scale, baseH * scale
+		local _bw = button._elv_baseW or button:GetWidth(); local _bh = button._elv_baseH or button:GetHeight(); local _w = self.db.microbar.buttonSize or _bw; local _h = (_bw > 0 and _bh > 0) and (_w * (_bh/_bw)) or (self.db.microbar.buttonSize * 1.4); button:Size(_w, _h)
+		button:ClearAllPoints()
 
-			-- positioning
-			button:ClearAllPoints()
-			if prev == ElvUI_MicroBar then
-				button:Point("TOPLEFT", prev, "TOPLEFT", offset, -offset)
-				col = 0
-			elseif col >= (bpr - 1) then
-				col = 0
-				row = row + 1
-				local upIdx = i - bpr
-				local upBtn = (upIdx >= 1) and _G[list[upIdx]] or nil
-				if upBtn then
-					button:Point("TOP", upBtn, "BOTTOM", 0, -spacing)
-				else
-					-- fallback if previous row not ready
-					local prevRow = rows[row-1]
-					local yoff = prevRow and (prevRow.maxH + spacing) or spacing
-					button:Point("TOPLEFT", ElvUI_MicroBar, "TOPLEFT", offset, -offset - yoff)
-				end
-			else
-				col = col + 1
-				button:Point("LEFT", prev, "RIGHT", spacing, 0)
-			end
-			prev = button
+		if prevButton == ElvUI_MicroBar then
+			button:Point("TOPLEFT", prevButton, "TOPLEFT", offset, -offset)
+		elseif (i - 1) % self.db.microbar.buttonsPerRow == 0 then
+			button:Point("TOP", lastColumnButton, "BOTTOM", 0, -spacing)
+			numRows = numRows + 1
+		else
+			button:Point("LEFT", prevButton, "RIGHT", spacing, 0)
+		end
 
-			-- per-row width/height tracking
-			local r = rows[row] or {width=0, maxH=0}
-			if r.width == 0 then r.width = bw else r.width = r.width + spacing + bw end
-			if bh > r.maxH then r.maxH = bh end
-			rows[row] = r
-			if r.width > maxWidth then maxWidth = r.width end
+		prevButton = button
 		end
 	end
 
-	if not ElvUI_MicroBar:GetPoint() then
-		ElvUI_MicroBar:Point("TOPLEFT", E.UIParent, "TOPLEFT", E:Scale(4), -E:Scale(4))
+	if AB.db.microbar.mouseover and not ElvUI_MicroBar:IsMouseOver() then
+		ElvUI_MicroBar:SetAlpha(0)
+	else
+		ElvUI_MicroBar:SetAlpha(self.db.microbar.alpha)
 	end
 
-	-- final bar size
-	local totalHeight = 0
-	for _, r in ipairs(rows) do
-		if totalHeight == 0 then totalHeight = r.maxH else totalHeight = totalHeight + spacing + r.maxH end
-	end
-	local finalW = offset * 2 + maxWidth
-	local finalH = offset * 2 + totalHeight
+	AB.MicroWidth = (((CharacterMicroButton:GetWidth() + spacing) * self.db.microbar.buttonsPerRow) - spacing) + (offset * 2)
+	AB.MicroHeight = (((CharacterMicroButton:GetHeight() + spacing) * numRows) - spacing) + (offset * 2)
+	ElvUI_MicroBar:Size(AB.MicroWidth, AB.MicroHeight)
 
-	ElvUI_MicroBar:Size(finalW, finalH)
-	ElvUI_MicroBar:SetScale((db.scale and db.scale > 0) and db.scale or 1)
-
-	-- visibility & mover
-	self:UpdateMicroBarVisibility()
 	if ElvUI_MicroBar.mover then
-		if db.enabled == false then E:DisableMover(ElvUI_MicroBar.mover:GetName()) else E:EnableMover(ElvUI_MicroBar.mover:GetName()) end
+		if self.db.microbar.enabled then
+			E:EnableMover(ElvUI_MicroBar.mover:GetName())
+		else
+			E:DisableMover(ElvUI_MicroBar.mover:GetName())
+		end
 	end
+
+	self:UpdateMicroBarVisibility()
 end
 
 function AB:SetupMicroBar()
-	-- ensure base buttons exist
-	if not _G["CharacterMicroButton"] or not _G["MainMenuMicroButton"] then
-		if self.RegisterEvent then self:RegisterEvent("PLAYER_ENTERING_WORLD", "SetupMicroBar") end
-		return
-	end
-	if self.UnregisterEvent then self:UnregisterEvent("PLAYER_ENTERING_WORLD") end
+	local microBar = CreateFrame("Frame", "ElvUI_MicroBar", E.UIParent)
+	microBar:Point("TOPLEFT", E.UIParent, "TOPLEFT", 4, -48)
+	microBar:SetFrameStrata("LOW")
+	microBar:EnableMouse(true)
+	microBar:SetScript("OnEnter", onEnter)
+	microBar:SetScript("OnLeave", onLeave)
 
-	if not ElvUI_MicroBar then
-		ElvUI_MicroBar = CreateFrame("Frame", "ElvUI_MicroBar", E.UIParent)
-		ElvUI_MicroBar:SetFrameStrata("LOW")
-		if ElvUI_MicroBar.SetTemplate then ElvUI_MicroBar:SetTemplate("Default", true) end
-	end
+	microBar.visibility = CreateFrame("Frame", nil, E.UIParent, "SecureHandlerStateTemplate")
+	microBar.visibility:SetScript("OnShow", function() microBar:Show() end)
+	microBar.visibility:SetScript("OnHide", function() microBar:Hide() end)
 
-	-- parent & skin buttons
-	local list = GetMicroButtonsList()
-	for i = 1, #list do
-		local btn = _G[list[i]]
-		if btn then
-			self:HandleMicroButton(btn)
-			btn:SetParent(ElvUI_MicroBar)
-		end
+	for i = 1, #MICRO_BUTTONS do
+		local btn = _G[MICRO_BUTTONS[i]]
+		if btn then self:HandleMicroButton(btn); btn:SetParent(ElvUI_MicroBar) end
 	end
 
-	-- initial layout
+	MicroButtonPortrait:SetAllPoints()
+
+	-- PvP Micro Button
+	PVPMicroButtonTexture:SetAllPoints()
+	PVPMicroButtonTexture:SetTexture([[Interface\AddOns\ElvUI\Media\Textures\PVP-Icons]])
+
+	if E.myfaction == "Alliance" then
+		PVPMicroButtonTexture:SetTexCoord(0.545, 0.935, 0.070, 0.940)
+	else
+		PVPMicroButtonTexture:SetTexCoord(0.100, 0.475, 0.070, 0.940)
+	end
+
+	self:SecureHook("VehicleMenuBar_MoveMicroButtons", "UpdateMicroButtonsParent")
+
+	if _G.UpdateMicroButtons then self:SecureHook("UpdateMicroButtons", "UpdateMicroButtonsParent") end
+	if _G.MoveMicroButtons then self:SecureHook("MoveMicroButtons", "UpdateMicroButtonsParent") end
+
+	if _G.UIParent_ManageFramePositions then self:SecureHook("UIParent_ManageFramePositions", "UpdateMicroButtonsParent") end
+
 	self:UpdateMicroPositionDimensions()
+	MainMenuBarPerformanceBar:Kill()
 
-	-- create mover AFTER size & anchor exist
-	if not ElvUI_MicroBar.mover and E.CreateMover then
-		E:CreateMover(ElvUI_MicroBar, "ElvAB_MicroBar", L["Micro Bar"], nil, nil, nil, "ALL,ACTIONBARS", nil, "actionbar,microbar")
-	end
+	E:CreateMover(microBar, "MicrobarMover", L["Micro Bar"], nil, nil, nil, "ALL,ACTIONBARS", nil, "actionbar,microbar")
+self:UpdateMicroButtonsParent()
+self:UpdateMicroPositionDimensions()
+self:UpdateMicroBarVisibility()
+if E and E.Delay then
+E:Delay(0.05, function() AB:UpdateMicroButtonsParent(); AB:UpdateMicroPositionDimensions() end)
+E:Delay(0.5, function() AB:UpdateMicroButtonsParent(); AB:UpdateMicroPositionDimensions() end)
+E:Delay(1.0, function() AB:UpdateMicroButtonsParent(); AB:UpdateMicroPositionDimensions() end)
+E:Delay(2.0, function() AB:UpdateMicroButtonsParent(); AB:UpdateMicroPositionDimensions() end)
+end
+ElvUI_MicroBar:HookScript("OnShow", function() AB:UpdateMicroButtonsParent(); AB:UpdateMicroPositionDimensions() end)
 
-	-- keep Blizzard from "stealing" buttons: hook if functions exist
-	local function reapply()
-		AB:UpdateMicroButtonsParent()
-		AB:UpdateMicroPositionDimensions()
-	end
-	HookIfExists("MoveMicroButtons", reapply)
-	HookIfExists("VehicleMenuBar_MoveMicroButtons", reapply)
-	HookIfExists("UpdateMicroButtons", reapply)
-
-	-- one-time delayed passes to catch late Blizzard relayouts
-	if E and E.Delay then
-		E:Delay(0.05, reapply)
-		E:Delay(0.5, reapply)
-	end
-
-	-- also reapply whenever bar is shown
-	if not ElvUI_MicroBar._elv_hooked_show then
-		ElvUI_MicroBar._elv_hooked_show = true
-		ElvUI_MicroBar:HookScript("OnShow", reapply)
-	end
 end

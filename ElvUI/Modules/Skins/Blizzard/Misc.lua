@@ -14,9 +14,15 @@ S:AddCallback("Skin_Misc", function()
 	GameMenuFrame:StripTextures()
 	GameMenuFrame:CreateBackdrop("Transparent")
 
+	local bd = GameMenuFrame.backdrop
+	bd:ClearAllPoints()
+	bd:SetPoint("TOPLEFT",  GameMenuFrame, "TOPLEFT", 0, 0)
+	bd:SetPoint("BOTTOMRIGHT", GameMenuFrame, "BOTTOMRIGHT", 0, -18)
+
 	GameMenuFrameHeader:Point("TOP", 0, 7)
 
 	local menuButtons = {
+		GameMenuButtonHelp,
 		GameMenuButtonOptions,
 		GameMenuButtonSoundOptions,
 		GameMenuButtonUIOptions,
