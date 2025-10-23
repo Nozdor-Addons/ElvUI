@@ -159,7 +159,11 @@ E.Media = {
 		Illuminati = M..[[ChatLogos\Illuminati.tga]],
 		MrHankey = M..[[ChatLogos\MrHankey.tga]],
 		Rainbow = M..[[ChatLogos\Rainbow.tga]],
-		TyroneBiggums = M..[[ChatLogos\TyroneBiggums.tga]]
+		TyroneBiggums = M..[[ChatLogos\TyroneBiggums.tga]],
+		Pelmen = M..[[ChatLogos\Pelmen.tga]],
+		useless = M..[[ChatLogos\useless.tga]],
+		Bronya = M..[[ChatLogos\bronya.tga]],
+		Koban = M..[[ChatLogos\Koban.tga]]
 	},
 	Textures = {
 		AllianceLogo = M..[[Textures\Alliance-Logo.blp]],

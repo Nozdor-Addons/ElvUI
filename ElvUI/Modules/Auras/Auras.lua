@@ -20,6 +20,18 @@ local GetWeaponEnchantInfo = GetWeaponEnchantInfo
 local GetInventoryItemTexture = GetInventoryItemTexture
 local DebuffTypeColor = DebuffTypeColor
 
+function A:RebuildIgnoreList()
+	local s = self.db and self.db.ignoreString
+	self.db.ignoreIDs = wipe(self.db.ignoreIDs or {})
+	for num in tostring(s or ""):gmatch("%d+") do
+		self.db.ignoreIDs[tonumber(num)] = true
+	end
+end
+
+function A:ShouldIgnore(spellId)
+	return spellId and self.db and self.db.ignoreIDs and self.db.ignoreIDs[spellId] or false
+end
+
 local DIRECTION_TO_POINT = {
 	DOWN_RIGHT = "TOPLEFT",
 	DOWN_LEFT = "TOPRIGHT",
@@ -552,19 +564,31 @@ function A:UpdateHeader(header)
 	end
 
 	local i = 1
-	repeat
-		local aura, _ = freshTable()
-		aura.name, _, aura.icon, aura.count, aura.dispelType, aura.duration, aura.expires, aura.caster = UnitAura("player", i, filter)
-		if aura.name then
-			aura.filter = filter
-			aura.index = i
+	while true do
+	local name, _, icon, count, dispelType, duration, expires, caster, _, _, spellId =
+		UnitAura("player", i, filter)
 
-			tinsert(sortingTable, aura)
-		else
-			releaseTable(aura)
-		end
-		i = i + 1
-	until not aura.name
+	if not name then
+		break
+	end
+
+	if not A:ShouldIgnore(spellId) then
+		local aura = freshTable()
+		aura.name       = name
+		aura.icon       = icon
+		aura.count      = count
+		aura.dispelType = dispelType
+		aura.duration   = duration
+		aura.expires    = expires
+		aura.caster     = caster
+		aura.spellId    = spellId
+		aura.index      = i
+		aura.filter     = filter
+		tinsert(sortingTable, aura)
+	end
+
+	i = i + 1
+	end
 
 	local sortMethod = (sorters[db.sortMethod] or sorters.INDEX)[db.sortDir == "-"][db.seperateOwn]
 	tsort(sortingTable, sortMethod)
@@ -614,7 +638,7 @@ function A:Initialize()
 
 	self.Initialized = true
 	self.db = E.db.auras
-
+	self:RebuildIgnoreList()
 	if LBF then
 		self.LBFGroup = LBF and LBF:Group("ElvUI", "Auras")
 	elseif E.Masque then

@@ -1,300 +1,403 @@
-local E, L, V, P, G = unpack(select(2, ...)) --Import: Engine, Locales, PrivateDB, ProfileDB, GlobalDB
-local S = E:GetModule("Skins")
+-- Quality Border Overlay for Bags & Bank (WotLK 3.3.5)
+-- Works with Blizzard bags and ElvUI Bags. Draws own overlay border and colors by item rarity.
+-- Rules:
+--   * Unknown rarity (cache cold) -> WHITE border (temporary)
+--   * Grey/White (0–1) -> no border
+--   * Green+ (>=2) -> rarity color
+-- Designed to be robust across reloads and late GetItemInfo.
 
---Lua functions
-local _G = _G
-local select = select
-local unpack = unpack
---WoW API / Variables
-local ContainerIDToInventoryID = ContainerIDToInventoryID
-local GetContainerItemLink = GetContainerItemLink
-local GetContainerItemQuestInfo = GetContainerItemQuestInfo
-local GetContainerNumFreeSlots = GetContainerNumFreeSlots
-local GetInventoryItemLink = GetInventoryItemLink
-local GetItemInfo = GetItemInfo
-local GetItemQualityColor = GetItemQualityColor
-local GetInventoryItemID = GetInventoryItemID
+local E, L, V, P, G = unpack(select(2, ...))
 
-local BANK_CONTAINER = BANK_CONTAINER
+local _G        = _G
+local select    = select
+local unpack    = unpack
+local type      = type
+local format    = string.format
 
-S:AddCallback("Skin_Bags", function()
-	if E.private.bags.enable then return end
-	if not E.private.skins.blizzard.enable or not E.private.skins.blizzard.bags then return end
+local WHITE_TEX        = "Interface\\Buttons\\WHITE8x8"
+local BORDER_THICKNESS = 1
+local RETRY_1          = 0.10
+local RETRY_2          = 0.25
 
-	local professionColors = {
-		[0x0001] = {E.db.bags.colors.profession.quiver.r, E.db.bags.colors.profession.quiver.g, E.db.bags.colors.profession.quiver.b},
-		[0x0002] = {E.db.bags.colors.profession.ammoPouch.r, E.db.bags.colors.profession.ammoPouch.g, E.db.bags.colors.profession.ammoPouch.b},
-		[0x0004] = {E.db.bags.colors.profession.soulBag.r, E.db.bags.colors.profession.soulBag.g, E.db.bags.colors.profession.soulBag.b},
-		[0x0008] = {E.db.bags.colors.profession.leatherworking.r, E.db.bags.colors.profession.leatherworking.g, E.db.bags.colors.profession.leatherworking.b},
-		[0x0010] = {E.db.bags.colors.profession.inscription.r, E.db.bags.colors.profession.inscription.g, E.db.bags.colors.profession.inscription.b},
-		[0x0020] = {E.db.bags.colors.profession.herbs.r, E.db.bags.colors.profession.herbs.g, E.db.bags.colors.profession.herbs.b},
-		[0x0040] = {E.db.bags.colors.profession.enchanting.r, E.db.bags.colors.profession.enchanting.g, E.db.bags.colors.profession.enchanting.b},
-		[0x0080] = {E.db.bags.colors.profession.engineering.r, E.db.bags.colors.profession.engineering.g, E.db.bags.colors.profession.engineering.b},
-		[0x0200] = {E.db.bags.colors.profession.gems.r, E.db.bags.colors.profession.gems.g, E.db.bags.colors.profession.gems.b},
-		[0x0400] = {E.db.bags.colors.profession.mining.r, E.db.bags.colors.profession.mining.g, E.db.bags.colors.profession.mining.b},
-	}
+-- ========= Utilities =========
+local function DefaultColor()
+    if E and E.media and E.media.bordercolor then
+        return unpack(E.media.bordercolor)
+    end
+    return 0.1, 0.1, 0.1
+end
 
-	local questColors = {
-		["questStarter"] = {E.db.bags.colors.items.questStarter.r, E.db.bags.colors.items.questStarter.g, E.db.bags.colors.items.questStarter.b},
-		["questItem"] =	{E.db.bags.colors.items.questItem.r, E.db.bags.colors.items.questItem.g, E.db.bags.colors.items.questItem.b}
-	}
+local function Delay(sec, fn)
+    if E and E.Delay then
+        return E:Delay(sec, fn)
+    elseif C_Timer and C_Timer.After then
+        return C_Timer.After(sec, fn)
+    else
+        local f = CreateFrame("Frame"); local t = 0
+        f:SetScript("OnUpdate", function(_, e) t=t+e; if t>=sec then f:SetScript("OnUpdate", nil); pcall(fn) end end)
+    end
+end
 
-	-- ContainerFrame
-	for i = 1, NUM_CONTAINER_FRAMES do
-		local frame = _G["ContainerFrame"..i]
-		local closeButton = _G["ContainerFrame"..i.."CloseButton"]
+local function ParseItemID(link)
+    if not link then return nil end
+    local id = link:match("item:(%d+)")
+    return id and tonumber(id) or nil
+end
 
-		frame:StripTextures(true)
-		frame:CreateBackdrop("Transparent")
-		frame.backdrop:Point("TOPLEFT", 9, -4)
-		frame.backdrop:Point("BOTTOMRIGHT", -4, 1)
+-- ========= Overlay =========
+local function EnsureOverlay(btn)
+    if not btn or btn.__QOverlay then return end
 
-		S:HookScript(frame, "OnShow", function(self)
-			S:SetBackdropHitRect(self)
-			S:Unhook(self, "OnShow")
-		end)
+    local f = CreateFrame("Frame", nil, btn)
+    f:SetAllPoints(btn)
+    f:EnableMouse(false)
+    -- Make sure we are above any skin/layers on the button
+    local base = btn.GetFrameLevel and btn:GetFrameLevel() or 0
+    f:SetFrameStrata("TOOLTIP")
+    f:SetFrameLevel(base + 100)
 
-		S:HandleCloseButton(closeButton, frame.backdrop)
+    local t = f:CreateTexture(nil, "OVERLAY")
+    local b = f:CreateTexture(nil, "OVERLAY")
+    local l = f:CreateTexture(nil, "OVERLAY")
+    local r = f:CreateTexture(nil, "OVERLAY")
+    t:SetTexture(WHITE_TEX); b:SetTexture(WHITE_TEX); l:SetTexture(WHITE_TEX); r:SetTexture(WHITE_TEX)
 
-		for j = 1, MAX_CONTAINER_ITEMS do
-			local item = _G["ContainerFrame"..i.."Item"..j]
-			local icon = _G["ContainerFrame"..i.."Item"..j.."IconTexture"]
-			local questIcon = _G["ContainerFrame"..i.."Item"..j.."IconQuestTexture"]
-			local cooldown = _G["ContainerFrame"..i.."Item"..j.."Cooldown"]
+    local inset = 0
+    t:SetPoint("TOPLEFT", f, "TOPLEFT", inset, -inset)
+    t:SetPoint("TOPRIGHT", f, "TOPRIGHT", -inset, -inset)
+    t:SetHeight(BORDER_THICKNESS)
 
-			item:SetNormalTexture(nil)
-			item:SetTemplate("Default", true)
-			item:StyleButton()
+    b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", inset, inset)
+    b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -inset, inset)
+    b:SetHeight(BORDER_THICKNESS)
 
-			icon:SetInside()
-			icon:SetTexCoord(unpack(E.TexCoords))
+    l:SetPoint("TOPLEFT", f, "TOPLEFT", inset, -inset)
+    l:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", inset, inset)
+    l:SetWidth(BORDER_THICKNESS)
 
-			questIcon:SetTexture(E.Media.Textures.BagQuestIcon)
-			questIcon.SetTexture = E.noop
-			questIcon:SetTexCoord(0, 1, 0, 1)
-			questIcon:SetInside()
+    r:SetPoint("TOPRIGHT", f, "TOPRIGHT", -inset, -inset)
+    r:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -inset, inset)
+    r:SetWidth(BORDER_THICKNESS)
 
-			cooldown.CooldownOverride = "bags"
-			E:RegisterCooldown(cooldown)
-		end
-	end
+    btn.__QOverlay = f
+    btn.__QTop, btn.__QBot, btn.__QLft, btn.__QRgt = t, b, l, r
 
-	BackpackTokenFrame:StripTextures()
+    btn:HookScript("OnShow", function(self)
+        if self.__QColor then
+            local r,g,b = self.__QColor[1], self.__QColor[2], self.__QColor[3]
+            self.__QTop:SetVertexColor(r,g,b,1)
+            self.__QBot:SetVertexColor(r,g,b,1)
+            self.__QLft:SetVertexColor(r,g,b,1)
+            self.__QRgt:SetVertexColor(r,g,b,1)
+        end
+        if self.__QVisible ~= nil then
+            local a = self.__QVisible and 1 or 0
+            self.__QTop:SetAlpha(a); self.__QBot:SetAlpha(a); self.__QLft:SetAlpha(a); self.__QRgt:SetAlpha(a)
+        end
+    end)
+end
 
-	for i = 1, MAX_WATCHED_TOKENS do
-		local token = _G["BackpackTokenFrameToken"..i]
+local function SetOverlayColor(btn, r, g, b)
+    EnsureOverlay(btn)
+    btn.__QTop:SetVertexColor(r, g, b, 1)
+    btn.__QBot:SetVertexColor(r, g, b, 1)
+    btn.__QLft:SetVertexColor(r, g, b, 1)
+    btn.__QRgt:SetVertexColor(r, g, b, 1)
+    btn.__QColor = {r, g, b}
+end
 
-		token:CreateBackdrop("Default")
-		token.backdrop:SetOutside(token.icon)
+local function SetOverlayVisible(btn, vis)
+    EnsureOverlay(btn)
+    local a = vis and 1 or 0
+    btn.__QTop:SetAlpha(a); btn.__QBot:SetAlpha(a); btn.__QLft:SetAlpha(a); btn.__QRgt:SetAlpha(a)
+    btn.__QVisible = vis
+end
 
-		token.icon:SetTexCoord(unpack(E.TexCoords))
-		token.icon:Point("LEFT", token.count, "RIGHT", 2, 0)
-		token.icon:Size(16)
-	end
+local function HideBlizzardIconBorder(btn, nameHint)
+    if nameHint then
+        local ib = _G[nameHint.."IconBorder"]
+        if ib then
+            if ib.Hide then ib:Hide() end
+            if ib.SetTexture then ib:SetTexture(nil) end
+            if ib.SetAlpha then ib:SetAlpha(0) end
+            ib.Show = function() end
+        end
+    end
+    if btn and btn.IconBorder then
+        local ib = btn.IconBorder
+        if ib.Hide then ib:Hide() end
+        if ib.SetTexture then ib:SetTexture(nil) end
+        if ib.SetAlpha then ib:SetAlpha(0) end
+        btn.IconBorder = nil
+    end
+end
 
-	local function setBagIcon(frame, texture)
-		if not frame.BagIcon then
-			local portraitButton = _G[frame:GetName().."PortraitButton"]
+-- Decide and set border for a button by given quality (or nil)
+local function ApplyDecision(btn, quality, useQualityColors)
+    if quality == nil then
+        -- unknown rarity -> white border (temporary)
+        SetOverlayColor(btn, 1, 1, 1)
+        SetOverlayVisible(btn, true)
+        btn.__QDesired = -1
+        return
+    end
+    if useQualityColors then
+        if quality >= 2 then
+            local r,g,b = GetItemQualityColor(quality)
+            SetOverlayColor(btn, r, g, b)
+            SetOverlayVisible(btn, true)
+        else
+            -- grey/white -> no border
+            SetOverlayVisible(btn, false)
+        end
+    else
+        -- user disabled quality colors -> hide
+        SetOverlayVisible(btn, false)
+    end
+    btn.__QDesired = quality
+end
 
-			portraitButton:CreateBackdrop()
-			portraitButton:Size(32)
-			portraitButton:Point("TOPLEFT", 12, -7)
-			portraitButton:StyleButton(nil, true)
-			portraitButton.hover:SetAllPoints()
+-- ========= Central updater =========
+local Pending = {}  -- weak set of buttons waiting for GetItemInfo
+local function TrackPending(btn, itemID)
+    if not btn or not itemID then return end
+    btn.__QPending = itemID
+    Pending[btn] = true
+end
 
-			frame.BagIcon = portraitButton:CreateTexture()
-			frame.BagIcon:SetTexCoord(unpack(E.TexCoords))
-			frame.BagIcon:SetAllPoints()
-		end
+local function Untrack(btn)
+    if not btn then return end
+    btn.__QPending = nil
+    Pending[btn] = nil
+end
 
-		frame.BagIcon:SetTexture(texture)
-	end
+local function RefreshButtonFromSource(btn, bagID, slotID, useQualityColors)
+    if not btn then return end
+    HideBlizzardIconBorder(btn, btn.GetName and btn:GetName() or nil)
 
-	local bagIconCache = {
-		[-2] = "Interface\\ContainerFrame\\KeyRing-Bag-Icon",
-		[0] = "Interface\\Buttons\\Button-Backpack-Up"
-	}
+    -- First try container-provided quality (instant on 3.3.5)
+    local _, _, _, q, _, _, link = GetContainerItemInfo(bagID, slotID)
+    if q ~= nil then
+        ApplyDecision(btn, q, useQualityColors)
+        Untrack(btn)
+        return
+    end
 
-	hooksecurefunc("ContainerFrame_GenerateFrame", function(frame)
-		local id = frame:GetID()
+    -- No quality yet. If we have link, try GetItemInfo; show white meanwhile.
+    if link then
+        ApplyDecision(btn, nil, useQualityColors) -- temporary white
+        local id = ParseItemID(link)
+        if id then
+            TrackPending(btn, id)
+        end
 
-		if id > 0 then
-			local itemID = GetInventoryItemID("player", ContainerIDToInventoryID(id))
+        -- quick retries (helps right after /reload)
+        Delay(RETRY_1, function()
+            local rq = select(3, GetItemInfo(link))
+            if rq ~= nil then
+                ApplyDecision(btn, rq, useQualityColors)
+                Untrack(btn)
+            end
+        end)
+        Delay(RETRY_2, function()
+            local rq = select(3, GetItemInfo(link))
+            if rq ~= nil then
+                ApplyDecision(btn, rq, useQualityColors)
+                Untrack(btn)
+            end
+        end)
+        return
+    end
 
-			if not bagIconCache[itemID] then
-				bagIconCache[itemID] = select(10, GetItemInfo(itemID))
-			end
+    -- empty slot
+    SetOverlayVisible(btn, false)
+    Untrack(btn)
+end
 
-			setBagIcon(frame, bagIconCache[itemID])
-		else
-			setBagIcon(frame, bagIconCache[id])
-		end
-	end)
+-- Bank button updater (item slots & bank bag buttons)
+local function RefreshBankButton(btn)
+    if not btn then return end
+    HideBlizzardIconBorder(btn, btn.GetName and btn:GetName() or nil)
 
-	hooksecurefunc("ContainerFrame_Update", function(frame)
-		local frameName = frame:GetName()
-		local id = frame:GetID()
-		local _, bagType = GetContainerNumFreeSlots(id)
-		local item, questIcon, link
+    local useQualityColors = true
+    if E and E.GetModule then
+        local B = E:GetModule("Bags", true)
+        if B and B.db then useQualityColors = not not B.db.qualityColors end
+    end
 
-		for i = 1, frame.size do
-			item = _G[frameName.."Item"..i]
-			questIcon = _G[frameName.."Item"..i.."IconQuestTexture"]
-			link = GetContainerItemLink(id, item:GetID())
+    if btn.isBag then
+        local invID = ContainerIDToInventoryID(btn:GetID())
+        local q = invID and GetInventoryItemQuality("player", invID) or nil
+        if q ~= nil then
+            ApplyDecision(btn, q, useQualityColors)
+            return
+        end
+        local link = invID and GetInventoryItemLink("player", invID)
+        if link then
+            ApplyDecision(btn, nil, useQualityColors)
+            local id = ParseItemID(link)
+            if id then TrackPending(btn, id) end
+            Delay(RETRY_1, function()
+                local rq = select(3, GetItemInfo(link))
+                if rq ~= nil then ApplyDecision(btn, rq, useQualityColors); Untrack(btn) end
+            end)
+            Delay(RETRY_2, function()
+                local rq = select(3, GetItemInfo(link))
+                if rq ~= nil then ApplyDecision(btn, rq, useQualityColors); Untrack(btn) end
+            end)
+        else
+            SetOverlayVisible(btn, false)
+        end
+        return
+    end
 
-			questIcon:Hide()
+    -- bank item slot
+    local slot = btn:GetID()
+    local _, _, _, q, _, _, link = GetContainerItemInfo(BANK_CONTAINER, slot)
+    if q ~= nil then
+        ApplyDecision(btn, q, useQualityColors)
+        return
+    end
+    if link then
+        ApplyDecision(btn, nil, useQualityColors)
+        local id = ParseItemID(link); if id then TrackPending(btn, id) end
+        Delay(RETRY_1, function()
+            local rq = select(3, GetItemInfo(link))
+            if rq ~= nil then ApplyDecision(btn, rq, useQualityColors); Untrack(btn) end
+        end)
+        Delay(RETRY_2, function()
+            local rq = select(3, GetItemInfo(link))
+            if rq ~= nil then ApplyDecision(btn, rq, useQualityColors); Untrack(btn) end
+        end)
+    else
+        SetOverlayVisible(btn, false)
+    end
+end
 
-			if professionColors[bagType] then
-				item:SetBackdropBorderColor(unpack(professionColors[bagType]))
-				item.ignoreBorderColors = true
-			elseif link then
-				local isQuestItem, questId, isActive = GetContainerItemQuestInfo(id, item:GetID())
-				local _, _, quality = GetItemInfo(link)
+-- ========= Hooks =========
+-- Blizzard containers
+local function RepaintContainer(frame)
+    if not frame or not frame.size then return end
+    local bag = frame:GetID()
+    local name = frame:GetName()
 
-				if questId and not isActive then
-					item:SetBackdropBorderColor(unpack(questColors.questStarter))
-					item.ignoreBorderColors = true
-					questIcon:Show()
-				elseif questId or isQuestItem then
-					item:SetBackdropBorderColor(unpack(questColors.questItem))
-					item.ignoreBorderColors = true
-				elseif quality then
-					item:SetBackdropBorderColor(GetItemQualityColor(quality))
-					item.ignoreBorderColors = true
-				else
-					item:SetBackdropBorderColor(unpack(E.media.bordercolor))
-					item.ignoreBorderColors = nil
-				end
-			else
-				item:SetBackdropBorderColor(unpack(E.media.bordercolor))
-				item.ignoreBorderColors = nil
-			end
-		end
-	end)
+    local useQualityColors = true
+    if E and E.GetModule then
+        local B = E:GetModule("Bags", true)
+        if B and B.db then useQualityColors = not not B.db.qualityColors end
+    end
 
-	-- BankFrame
-	BankFrame:StripTextures(true)
-	BankFrame:CreateBackdrop("Transparent")
-	BankFrame.backdrop:Point("TOPLEFT", 11, -12)
-	BankFrame.backdrop:Point("BOTTOMRIGHT", -26, 76)
+    for i=1, frame.size do
+        local btn = _G[name.."Item"..i]
+        if btn then
+            EnsureOverlay(btn)
+            RefreshButtonFromSource(btn, bag, i, useQualityColors)
+        end
+    end
+end
 
-	S:HookScript(BankFrame, "OnShow", function(self)
-		S:SetUIPanelWindowInfo(self, "width")
-		S:SetBackdropHitRect(self)
-		S:Unhook(self, "OnShow")
-	end)
+local function BankButtonUpdate(btn)
+    EnsureOverlay(btn)
+    RefreshBankButton(btn)
+end
 
-	S:HandleCloseButton(BankCloseButton, BankFrame.backdrop)
+local function HookWhenAvailable(fname, hookfn, eventName, cond)
+    if type(_G[fname]) == "function" then
+        hooksecurefunc(fname, hookfn); return
+    end
+    local f = CreateFrame("Frame")
+    f:RegisterEvent(eventName or "PLAYER_ENTERING_WORLD")
+    f:SetScript("OnEvent", function(self)
+        if not cond or cond() then
+            if type(_G[fname]) == "function" then
+                hooksecurefunc(fname, hookfn)
+                self:UnregisterAllEvents()
+                self:SetScript("OnEvent", nil)
+            end
+        end
+    end)
+end
 
-	BankFrameItem1:Point("TOPLEFT", 39, -73)
+HookWhenAvailable("ContainerFrame_Update", RepaintContainer, "PLAYER_ENTERING_WORLD")
+HookWhenAvailable("BankFrameItemButton_Update", BankButtonUpdate, "BANKFRAME_OPENED", function() return _G.BankFrame and _G.BankFrame:IsShown() end)
 
-	for i = 1, NUM_BANKGENERIC_SLOTS do
-		local button = _G["BankFrameItem"..i]
-		local icon = _G["BankFrameItem"..i.."IconTexture"]
-		local quest = _G["BankFrameItem"..i.."IconQuestTexture"]
-		local cooldown = _G["BankFrameItem"..i.."Cooldown"]
+-- ElvUI Bags
+local function HookElvUIBags()
+    if not (E and E.GetModule) then return end
+    local B = E:GetModule("Bags", true)
+    if not B then return end
 
-		button:SetNormalTexture(nil)
-		button:SetTemplate("Default", true)
-		button:StyleButton()
+    if not B.__QHooked then
+        B.__QHooked = true
+        hooksecurefunc(B, "UpdateSlot", function(_, frame, bagID, slotID)
+            if not (frame and frame.Bags and frame.Bags[bagID]) then return end
+            local slot = frame.Bags[bagID][slotID]
+            if not slot then return end
+            EnsureOverlay(slot)
+            local useQualityColors = not not (B.db and B.db.qualityColors)
+            RefreshButtonFromSource(slot, bagID, slotID, useQualityColors)
+        end)
+        hooksecurefunc(B, "UpdateKeySlot", function(_, slotID)
+            local slot = _G["ElvUIKeyFrameItem"..slotID]
+            if not slot then return end
+            EnsureOverlay(slot)
+            local useQualityColors = not not (B.db and B.db.qualityColors)
+            RefreshButtonFromSource(slot, KEYRING_CONTAINER, slotID, useQualityColors)
+        end)
+    end
+end
 
-		icon:SetInside()
-		icon:SetTexCoord(unpack(E.TexCoords))
+HookElvUIBags()
+local once = CreateFrame("Frame")
+once:RegisterEvent("PLAYER_ENTERING_WORLD")
+once:SetScript("OnEvent", function(self) HookElvUIBags() end)
 
-		quest:SetTexture(E.Media.Textures.BagQuestIcon)
-		quest.SetTexture = E.noop
-		quest:SetTexCoord(0, 1, 0, 1)
-		quest:SetInside()
+-- Universal quality hook (any addon that calls it)
+if type(_G.SetItemButtonQuality) == "function" then
+    hooksecurefunc("SetItemButtonQuality", function(button, quality)
+        if not button then return end
+        EnsureOverlay(button)
+        local use = true
+        if E and E.GetModule then
+            local B = E:GetModule("Bags", true)
+            if B and B.db then use = not not B.db.qualityColors end
+        end
+        ApplyDecision(button, quality, use)
+    end)
+end
 
-		cooldown.CooldownOverride = "bags"
-		E:RegisterCooldown(cooldown)
-	end
-
-	BankFrame.itemBackdrop = CreateFrame("Frame", "BankFrameItemBackdrop", BankFrame)
-	BankFrame.itemBackdrop:SetTemplate("Default")
-	BankFrame.itemBackdrop:SetOutside(BankFrameItem1, 6, 6, BankFrameItem28)
-	BankFrame.itemBackdrop:SetFrameLevel(BankFrame:GetFrameLevel())
-
-	for i = 1, NUM_BANKBAGSLOTS do
-		local button = _G["BankFrameBag"..i]
-		local icon = _G["BankFrameBag"..i.."IconTexture"]
-		local highlight = _G["BankFrameBag"..i.."HighlightFrameTexture"]
-
-		button:SetNormalTexture(nil)
-		button:SetTemplate("Default", true)
-		button:StyleButton()
-
-		icon:SetInside()
-		icon:SetTexCoord(unpack(E.TexCoords))
-
-		highlight:SetInside()
-		highlight:SetTexture(unpack(E.media.rgbvaluecolor), 0.3)
-	end
-
-	BankFrame.bagBackdrop = CreateFrame("Frame", "BankFrameBagBackdrop", BankFrame)
-	BankFrame.bagBackdrop:SetTemplate("Default")
-	BankFrame.bagBackdrop:SetOutside(BankFrameBag1, 6, 6, BankFrameBag7)
-	BankFrame.bagBackdrop:SetFrameLevel(BankFrame:GetFrameLevel())
-
-	S:HandleButton(BankFramePurchaseButton)
-	BankFramePurchaseButton:Point("RIGHT", -4, -10)
-
-	hooksecurefunc("BankFrameItemButton_Update", function(button)
-		local id = button:GetID()
-
-		if button.isBag then
-			local link = GetInventoryItemLink("player", ContainerIDToInventoryID(id))
-
-			if link then
-				local quality = select(3, GetItemInfo(link))
-
-				if quality then
-					button:SetBackdropBorderColor(GetItemQualityColor(quality))
-					button.ignoreBorderColors = true
-				else
-					button:SetBackdropBorderColor(unpack(E.media.bordercolor))
-					button.ignoreBorderColors = nil
-				end
-			else
-				button:SetBackdropBorderColor(unpack(E.media.bordercolor))
-				button.ignoreBorderColors = nil
-			end
-		else
-			local link = GetContainerItemLink(BANK_CONTAINER, id)
-			local questTexture = _G[button:GetName().."IconQuestTexture"]
-
-			if questTexture then
-				questTexture:Hide()
-			end
-
-			if link then
-				local isQuestItem, questId, isActive = GetContainerItemQuestInfo(BANK_CONTAINER, id)
-
-				if questId and not isActive then
-					button:SetBackdropBorderColor(unpack(questColors.questStarter))
-					button.ignoreBorderColors = true
-
-					if questTexture then
-						questTexture:Show()
-					end
-				elseif questId or isQuestItem then
-					button:SetBackdropBorderColor(unpack(questColors.questItem))
-					button.ignoreBorderColors = true
-				else
-					local quality = select(3, GetItemInfo(link))
-
-					if quality then
-						button:SetBackdropBorderColor(GetItemQualityColor(quality))
-						button.ignoreBorderColors = true
-					else
-						button:SetBackdropBorderColor(unpack(E.media.bordercolor))
-						button.ignoreBorderColors = nil
-					end
-				end
-			else
-				button:SetBackdropBorderColor(unpack(E.media.bordercolor))
-				button.ignoreBorderColors = nil
-			end
-		end
-	end)
+-- GET_ITEM_INFO_RECEIVED: refresh pending buttons by itemID
+local evt = CreateFrame("Frame")
+evt:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+evt:SetScript("OnEvent", function(_, _, itemID)
+    if not itemID then return end
+    for btn in pairs(Pending) do
+        if btn.__QPending == itemID then
+            -- Try to resolve
+            local link = btn.GetItemLink and btn:GetItemLink() -- some buttons have helper
+            local rq
+            if link then
+                rq = select(3, GetItemInfo(link))
+            end
+            if rq == nil then
+                -- We don't know bag/slot from button reliably here; just recolor white stays.
+            else
+                local use = true
+                if E and E.GetModule then
+                    local B = E:GetModule("Bags", true); if B and B.db then use = not not B.db.qualityColors end
+                end
+                ApplyDecision(btn, rq, use)
+                Untrack(btn)
+            end
+        end
+    end
 end)
+
+-- Safety: hide IconBorder for Blizzard bags when shown
+if type(_G.ContainerFrameItemButton_Update) == "function" then
+hooksecurefunc("ContainerFrameItemButton_Update", function(btn)
+    if not btn then return end
+    HideBlizzardIconBorder(btn, btn:GetName() or nil)
+end)
+
+end

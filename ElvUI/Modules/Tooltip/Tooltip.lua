@@ -1,5 +1,11 @@
 local E, L, V, P, G = unpack(select(2, ...)) --Import: Engine, Locales, PrivateDB, ProfileDB, GlobalDB
 local TT = E:GetModule("Tooltip")
+local LABEL_SPEC = (L and (L["Talent Specialization:"] or L["Talent Specialization"])) or "Talent Specialization:"
+local LABEL_ILVL = (L and (L["Item Level:"] or L["Item Level"])) or "Item Level:"
+
+TT._inRefresh = false
+TT._pendingGUID = nil
+TT._ilvlReadyByGUID = {}
 
 --Lua functions
 local _G = _G
@@ -55,6 +61,8 @@ local FACTION_HORDE = FACTION_HORDE
 local LEVEL = LEVEL
 local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local ID = ID
+local GetNumTalentTabs = GetNumTalentTabs
+local GetTalentTabInfo = GetTalentTabInfo
 
 local GameTooltip, GameTooltipStatusBar = GameTooltip, GameTooltipStatusBar
 local targetList, inspectCache = {}, {}
@@ -85,6 +93,30 @@ local updateUnitModifiers = {
 	["RALT"] = true,
 }
 
+local function EnsureTalentAPIReady()
+    if not IsAddOnLoaded("Blizzard_InspectUI") then pcall(LoadAddOn, "Blizzard_InspectUI") end
+    if not IsAddOnLoaded("Blizzard_TalentUI")  then pcall(LoadAddOn, "Blizzard_TalentUI")  end
+end
+
+local function EnsureInspectUILoaded()
+    if not IsAddOnLoaded("Blizzard_InspectUI") then
+        pcall(LoadAddOn, "Blizzard_InspectUI")
+    end
+end
+
+local function InspectSpecName()
+    local num = GetNumTalentTabs(true) or 0
+    local bestName, bestPts = nil, -1
+    for i = 1, num do
+        local name, _, pts = GetTalentTabInfo(i, true)
+        pts = tonumber(pts) or 0
+        if name and pts > bestPts then
+            bestName, bestPts = name, pts
+        end
+    end
+    return bestName
+end
+
 local function GetItemLevelColor(ilvl)
     ilvl = math.floor((tonumber(ilvl) or 0) + 0.5)
     local q
@@ -95,6 +127,20 @@ local function GetItemLevelColor(ilvl)
     end
     local c = _G.ITEM_QUALITY_COLORS and _G.ITEM_QUALITY_COLORS[q]
     return c and { r = c.r, g = c.g, b = c.b } or nil
+end
+
+local function ReplaceRightText(tt, leftLabel, newRight)
+    if not (tt and tt:GetName()) then return false end
+    for i = 1, tt:NumLines() do
+        local L = _G[tt:GetName().."TextLeft"..i]
+        local R = _G[tt:GetName().."TextRight"..i]
+        if L and R and L:GetText() == leftLabel then
+            R:SetText(newRight)
+            R:Show()
+            return true
+        end
+    end
+    return false
 end
 
 function TT:GetItemLvL(unit, guid)
@@ -308,65 +354,126 @@ function TT:SetUnitText(tt, unit, level, isShiftKeyDown)
 end
 
 function TT:INSPECT_TALENT_READY(event, unit)
-	if not unit then
-		if self.lastGUID ~= UnitGUID("mouseover") then return end
+    if not unit then
+        self:UnregisterEvent(event)
+        local _, tooltipUnit = GameTooltip:GetUnit()
+        if not tooltipUnit or UnitGUID(tooltipUnit) ~= self.lastGUID then return end
+        unit = tooltipUnit
+    elseif UnitGUID(unit) ~= self.lastGUID then
+        return
+    end
 
-		self:UnregisterEvent(event)
+    local itemLevel = self:GetItemLvL(unit)
+    local specName = InspectSpecName()
 
-		unit = "mouseover"
-		if not UnitExists(unit) then return end
-	end
+    inspectCache[self.lastGUID] = inspectCache[self.lastGUID] or {}
+    inspectCache[self.lastGUID].time = GetTime()
+    if specName then
+        inspectCache[self.lastGUID].specName = specName
+        ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+    end
+    if itemLevel then
+        inspectCache[self.lastGUID].itemLevel = itemLevel
+    end
 
-	local itemLevel = self:GetItemLvL(unit)
-	local _, specName = E:GetTalentSpecInfo(true)
-	inspectCache[self.lastGUID] = {time = GetTime()}
+    if GameTooltip:IsShown() then GameTooltip:Show() end
+    if TT._pendingGUID == self.lastGUID and TT._ilvlReadyByGUID[self.lastGUID] then
+        TT._pendingGUID = nil
+    end
+end
 
-	if specName then
-		inspectCache[self.lastGUID].specName = specName
-	end
+function TT:INSPECT_READY(_, guid)
+    if not guid or guid ~= self.lastGUID then return end
+    self:UnregisterEvent("INSPECT_READY")
 
-	if itemLevel then
-		inspectCache[self.lastGUID].itemLevel = itemLevel
-	end
+    local _, tooltipUnit = GameTooltip:GetUnit()
+    if not tooltipUnit or UnitGUID(tooltipUnit) ~= guid then return end
 
-	GameTooltip:SetUnit(unit)
+    local specName = InspectSpecName()
+    if specName then
+        inspectCache[guid] = inspectCache[guid] or {}
+        inspectCache[guid].specName = specName
+        inspectCache[guid].time = GetTime()
+        ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+    end
+
+    if GameTooltip:IsShown() then GameTooltip:Show() end
+    if TT._pendingGUID == guid and TT._ilvlReadyByGUID[guid] then
+        TT._pendingGUID = nil
+    end
 end
 
 function TT:ShowInspectInfo(tt, unit, r, g, b)
-	local canInspect = CanInspect(unit)
-	if not canInspect then return end
+    local GUID = UnitGUID(unit)
 
-	local GUID = UnitGUID(unit)
-	if GUID == E.myguid then
-		local _, specName = E:GetTalentSpecInfo()
+    if GUID == E.myguid then
+        local _, specName = E:GetTalentSpecInfo()
+			tt:AddDoubleLine(LABEL_SPEC, specName, nil, nil, nil, r, g, b)
+			tt:AddDoubleLine(LABEL_ILVL, self:GetItemLvL("player"))
+        return
+    end
 
-		tt:AddDoubleLine(L["Talent Specialization:"], specName, nil, nil, nil, r, g, b)
-		tt:AddDoubleLine(L["Item Level:"], self:GetItemLvL("player"))
-		return
-	elseif inspectCache[GUID] then
-		local specName = inspectCache[GUID].specName
-		local itemLevel = inspectCache[GUID].itemLevel
+if GUID and inspectCache[GUID] then
+    local cache   = inspectCache[GUID]
+    local fresh   = (GetTime() - (cache.time or 0)) < 900
+    local spec    = cache.specName
+    local ilvl    = cache.itemLevel
 
-		if (GetTime() - inspectCache[GUID].time) < 900 and specName and itemLevel then
-			tt:AddDoubleLine(L["Talent Specialization:"], specName, nil, nil, nil, r, g, b)
-			tt:AddDoubleLine(L["Item Level:"], itemLevel)
-			return
-		else
-			inspectCache[GUID] = nil
-		end
-	end
+    if fresh and (spec or ilvl) then
+		tt:AddDoubleLine(LABEL_SPEC, spec or LOADING_LABEL, nil, nil, nil, r, g, b)
+		tt:AddDoubleLine(LABEL_ILVL, ilvl or LOADING_LABEL)
 
-	if InspectFrame and InspectFrame.unit then
-		if UnitIsUnit(InspectFrame.unit, unit) then
-			self.lastGUID = GUID
-			self:INSPECT_TALENT_READY(nil, unit)
-		end
-	else
-		self.lastGUID = GUID
-		NotifyInspect(unit)
-		self:RegisterEvent("INSPECT_TALENT_READY")
-	end
+			if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= GUID and (not spec or not ilvl) then
+				TT._pendingGUID = GUID
+				self.lastGUID = GUID
+				EnsureTalentAPIReady()
+				pcall(SetInspectTarget, unit)
+				NotifyInspect(unit)
+				self:RegisterEvent("INSPECT_TALENT_READY")
+				self:RegisterEvent("INSPECT_READY")
+				ItemLevelMixIn:Request(unit)
+				E:Delay(0.25, function()
+    if self.lastGUID == GUID and GameTooltip:IsShown() and not (inspectCache[GUID] and inspectCache[GUID].specName) then
+        local specName = InspectSpecName()
+        if specName then
+            inspectCache[GUID] = inspectCache[GUID] or {}
+            inspectCache[GUID].specName = specName
+            inspectCache[GUID].time = GetTime()
+            ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+            GameTooltip:Show()
+        end
+    end
+end)
+			end
+        return
+    end
 end
+tt:AddDoubleLine(LABEL_SPEC, LOADING_LABEL, nil, nil, nil, r, g, b)
+tt:AddDoubleLine(LABEL_ILVL, LOADING_LABEL)
+if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= GUID then
+    TT._pendingGUID = GUID
+    self.lastGUID = GUID
+    EnsureTalentAPIReady()        
+    pcall(SetInspectTarget, unit)
+    NotifyInspect(unit)
+    self:RegisterEvent("INSPECT_TALENT_READY")
+    self:RegisterEvent("INSPECT_READY")
+    ItemLevelMixIn:Request(unit)
+	E:Delay(0.25, function()
+    if self.lastGUID == GUID and GameTooltip:IsShown() and not (inspectCache[GUID] and inspectCache[GUID].specName) then
+        local specName = InspectSpecName()
+        if specName then
+            inspectCache[GUID] = inspectCache[GUID] or {}
+            inspectCache[GUID].specName = specName
+            inspectCache[GUID].time = GetTime()
+            ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+            GameTooltip:Show()
+        end
+    end
+end)
+end
+end
+
 
 function TT:GameTooltip_OnTooltipSetUnit(tt)
 	local isShiftKeyDown = IsShiftKeyDown()
@@ -447,9 +554,12 @@ function TT:GameTooltip_OnTooltipSetUnit(tt)
         if color then
             self:ShowInspectInfo(tt, unit, color.r, color.g, color.b)
 
-            if not UnitIsEnemy("player", unit) then
-                ItemLevelMixIn:Request(unit)
-            end
+			if not TT._inRefresh and not UnitIsEnemy("player", unit) then
+				local guid = UnitGUID(unit)
+				if guid and TT._pendingGUID ~= guid then
+					ItemLevelMixIn:Request(unit)
+				end
+			end
         end
     end
 
@@ -778,17 +888,28 @@ function TT:Initialize()
 
     TOOLTIP_UNIT_LEVEL_RACE_CLASS_TYPE = gsub(TOOLTIP_UNIT_LEVEL_RACE_CLASS_TYPE, "\n.+", "")
 
-    hooksecurefunc(ItemLevelMixIn, "Update", function(self, unit)
-        unit = unit or self.unit
-        local giud = unit and UnitGUID(unit) or self.guid
+hooksecurefunc(ItemLevelMixIn, "Update", function(self, unit)
+    unit = unit or self.unit
+    local guid = unit and UnitGUID(unit) or self.guid
+    if not (unit and guid) then return end
 
-        if unit and giud then
-            local _, tooltipUNIT = GameTooltip:GetUnit()
-            if tooltipUNIT and giud == UnitGUID(tooltipUNIT) then
-                local itemLevel = TT:GetItemLvL(unit, giud)
-            end
-        end
-    end)
+    local _, tooltipUnit = GameTooltip:GetUnit()
+    if not tooltipUnit or guid ~= UnitGUID(tooltipUnit) then return end
+
+    local ilvl = TT:GetItemLvL(unit, guid)
+    inspectCache[guid] = inspectCache[guid] or {}
+    inspectCache[guid].itemLevel = ilvl
+    inspectCache[guid].time = GetTime()
+
+    local shown = ReplaceRightText(GameTooltip, LABEL_ILVL, ilvl or LOADING_LABEL)
+    TT._ilvlReadyByGUID[guid] = true
+
+    if shown and GameTooltip:IsShown() then GameTooltip:Show() end
+
+    if TT._pendingGUID == guid and inspectCache[guid].specName then
+        TT._pendingGUID = nil
+    end
+end)
 	self.Initialized = true
 end
 
