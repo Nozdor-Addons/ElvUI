@@ -21,16 +21,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create ZIP from current commit (exclude .github)
+      - name: Create ZIP from current commit (exclude .github and README.md)
         id: make_zip
         shell: bash
         run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"         # owner/repo -> repo
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
           BRANCH="${GITHUB_REF_NAME}"
           SHORT_SHA="${GITHUB_SHA:0:7}"
           ZIP_NAME="${REPO_NAME}-${BRANCH}-${SHORT_SHA}.zip"
 
-          git archive --format=zip -o "$ZIP_NAME" HEAD -- . ':(exclude).github'
+          git archive --format=zip -o "$ZIP_NAME" HEAD -- . ':(exclude).github' ':(exclude)README.md'
 
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
@@ -47,11 +47,22 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_ELVUI }}
         run: |
-          COMMIT_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
-          BRANCH="${GITHUB_REF_NAME}"
+          REPO_NAME='${{ github.event.repository.name }}'
+          COMMITS_JSON='${{ toJson(github.event.commits) }}'
+          PAYLOAD=$(jq -n --arg repo "$REPO_NAME" --argjson commits "$COMMITS_JSON" '
+            {content: ($repo + "\n" + (
+            [$commits[].message
+              | gsub("\r\n"; "\n")
+              | gsub("\r"; "\n")
+              | (split("\n") | map(select(. != "")) | join("\n"))
+              | gsub("\n+$"; "")
+              | select(. != "")
+            ] | join("\n")))}
+          ')
+
           curl -s -X POST \
-            -F "content=🟢 Новый коммит в ${GITHUB_REPOSITORY} (${BRANCH}): <${COMMIT_URL}> \
-            -F "file=@$ZIP_NAME" \
+            -F "payload_json=$PAYLOAD" \
+            -F "file=@${ZIP_NAME}" \
             "$WEBHOOK_URL"
 
       - name: Create GitHub release (fallback for big ZIP)
@@ -83,9 +94,21 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_ELVUI }}
         run: |
-          COMMIT_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          REPO_NAME='${{ github.event.repository.name }}'
+          COMMITS_JSON='${{ toJson(github.event.commits) }}'
           REL_TAG="auto-${GITHUB_REF_NAME}-${GITHUB_SHA}"
           REL_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${REL_TAG}"
+
+          PAYLOAD=$(jq -n --arg repo "$REPO_NAME" --argjson commits "$COMMITS_JSON" --arg url "$REL_URL" '
+            {content: ($repo + "\n" + ([$commits[].message
+              | gsub("\r\n"; "\n")
+              | gsub("\r"; "\n")
+              | (split("\n") | map(select(. != "")) | join("\n"))
+              | gsub("\n+$"; "")
+              | select(. != "")
+            ] | join("\n")) + "\n\n" + "Архив: " + $url)}
+          ')
+
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\":\"🟡 Новый коммит: <${COMMIT_URL}>\\nАрхив слишком большой для вложения. Скачайте из релиза: ${REL_URL}\"}" \
+            -d "$PAYLOAD" \
             "$WEBHOOK_URL"
