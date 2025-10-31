@@ -325,9 +325,13 @@ function AB:PLAYER_REGEN_ENABLED()
 		MultiCastRecallSpellButton_Update(MultiCastRecallSpellButton)
 		AB.NeedRecallButtonUpdate = nil
 	end
-
+	if AB.NeedsUpdateMicroButtonsParent then
+		self:UpdateMicroButtonsParent()
+		AB.NeedsUpdateMicroButtonsParent = nil
+	end
 	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 end
+
 
 local function Vehicle_OnEvent(self, event)
 	if CanExitVehicle() and not E.db.general.minimap.icons.vehicleLeave.hide then

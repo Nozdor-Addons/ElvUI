@@ -61,6 +61,7 @@ do
 	AddOn:AddLib("EP", "LibElvUIPlugin-1.0")
 	AddOn:AddLib("LSM", "LibSharedMedia-3.0")
 	AddOn:AddLib("ACL", "AceLocale-3.0-ElvUI")
+	AddOn:AddLib('ACH', 'LibAceConfigHelper')
 	AddOn:AddLib("LAB", "LibActionButton-1.0-ElvUI")
 	AddOn:AddLib("LAI", "LibAuraInfo-1.0-ElvUI", true)
 	AddOn:AddLib("LBF", "LibButtonFacade", true)
@@ -106,9 +107,13 @@ AddOn.UnitFrames = AddOn:NewModule("UnitFrames","AceTimer-3.0","AceEvent-3.0","A
 AddOn.WorldMap = AddOn:NewModule("WorldMap","AceHook-3.0","AceEvent-3.0","AceTimer-3.0")
 
 do
-	local arg2, arg3 = "([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1"
-	function AddOn:EscapeString(str)
-		return gsub(str, arg2, arg3)
+	local a,b,c = '','([%(%)%.%%%+%-%*%?%[%^%$])','%%%1'
+	function AddOn:EscapeString(s) return gsub(s,b,c) end
+
+	local d = {'|[TA].-|[ta]','|c[fF][fF]%x%x%x%x%x%x','|r','^%s+','%s+$'}
+	function AddOn:StripString(s, ignoreTextures)
+		for i = ignoreTextures and 2 or 1, #d do s = gsub(s,d[i],a) end
+		return s
 	end
 end
 
@@ -341,7 +346,7 @@ function AddOn:ToggleOptionsUI(msg)
 			if not IsAddOnLoaded("ElvUI_OptionsUI") then noConfig = true end
 
 			-- version check elvui options if it's actually enabled
-			if (not noConfig) and GetAddOnMetadata("ElvUI_OptionsUI", "Version") ~= "1.06" then
+			if (not noConfig) and GetAddOnMetadata("ElvUI_OptionsUI", "Version") ~= "9.00" then
 				self:StaticPopup_Show("CLIENT_UPDATE_REQUEST")
 			end
 		else

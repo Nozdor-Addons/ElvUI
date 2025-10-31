@@ -12,10 +12,10 @@ local GetTradeSkillItemLink = GetTradeSkillItemLink
 local GetTradeSkillReagentInfo = GetTradeSkillReagentInfo
 local GetTradeSkillReagentItemLink = GetTradeSkillReagentItemLink
 local hooksecurefunc = hooksecurefunc
+local IsAddOnLoaded = IsAddOnLoaded
 
-S:AddCallbackForAddon("Blizzard_TradeSkillUI", "Skin_Blizzard_TradeSkillUI", function()
-	if not E.private.skins.blizzard.enable or not E.private.skins.blizzard.tradeskill then return end
-
+local function LoadTradeSkill()
+	
 	local SKILLS_DISPLAYED = 21
 	TRADE_SKILLS_DISPLAYED = SKILLS_DISPLAYED
 
@@ -53,7 +53,6 @@ S:AddCallbackForAddon("Blizzard_TradeSkillUI", "Skin_Blizzard_TradeSkillUI", fun
 	TradeSkillExpandButtonFrame:StripTextures()
 
 	S:HandleCollapseExpandButton(TradeSkillCollapseAllButton, "+")
-
 	for i = 1, SKILLS_DISPLAYED do
 		local skillButton = _G["TradeSkillSkill"..i]
 		local skillButtonHighlight = _G["TradeSkillSkill"..i.."Highlight"]
@@ -230,4 +229,10 @@ S:AddCallbackForAddon("Blizzard_TradeSkillUI", "Skin_Blizzard_TradeSkillUI", fun
 			end
 		end
 	end)
-end)
+end
+
+S:AddCallbackForAddon("Blizzard_TradeSkillUI", "Skin_Blizzard_TradeSkillUI", LoadTradeSkill)
+
+if IsAddOnLoaded("Blizzard_TradeSkillUI") then
+	LoadTradeSkill()
+end

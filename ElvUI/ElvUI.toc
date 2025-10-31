@@ -1,6 +1,6 @@
 ## Interface: 30300
-## Author: Elv, Bunny, Альтруист
-## Version: 7.04
+## Author: Elv, Bunny, fxpw, Альтруист
+## Version: 9.00
 ## Title: |cff1784d1E|r|cffe5e3e3lvUI|r
 ## Notes: User Interface replacement AddOn for World of Warcraft.
 ## SavedVariables: ElvDB, ElvPrivateDB

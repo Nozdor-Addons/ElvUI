@@ -50,7 +50,7 @@ E.PopupDialogs.ELVUI_UPDATE_AVAILABLE = {
 		self.editBox:SetAutoFocus(false)
 		self.editBox.width = self.editBox:GetWidth()
 		self.editBox:Width(220)
-		self.editBox:SetText("https://github.com/ElvUI-WotLK/ElvUI")
+		self.editBox:SetText("https://discord.gg/bfcYWgDHt8")
 		self.editBox:HighlightText()
 		ChatEdit_FocusActiveWindow()
 	end,
@@ -70,8 +70,8 @@ E.PopupDialogs.ELVUI_UPDATE_AVAILABLE = {
 		self:GetParent():Hide()
 	end,
 	EditBoxOnTextChanged = function(self)
-		if self:GetText() ~= "https://github.com/ElvUI-WotLK/ElvUI" then
-			self:SetText("https://github.com/ElvUI-WotLK/ElvUI")
+		if self:GetText() ~= "https://discord.gg/bfcYWgDHt8" then
+			self:SetText("https://discord.gg/bfcYWgDHt8")
 		end
 		self:HighlightText()
 		self:ClearFocus()
@@ -119,6 +119,13 @@ E.PopupDialogs.ELVUI_EDITBOX = {
 	whileDead = 1,
 	preferredIndex = 3,
 	hideOnEscape = 1,
+}
+
+E.PopupDialogs.CLIENT_UPDATE_REQUEST = {
+	text = L["Detected that your ElvUI OptionsUI addon is out of date. This may be a result of your Tukui Client being out of date. Please visit our download page and update your Tukui Client, then reinstall ElvUI. Not having your ElvUI OptionsUI addon up to date will result in missing options."],
+	button1 = OKAY,
+	OnAccept = E.noop,
+	showAlert = 1
 }
 
 E.PopupDialogs.CONFIRM_LOSE_BINDING_CHANGES = {
@@ -392,6 +399,15 @@ E.PopupDialogs.RESET_PROFILE_PROMPT = {
 	whileDead = 1,
 }
 
+E.PopupDialogs.ELVUI_SIRUS_ENABLE = {
+	text = "Обнаружен несовместимый модуль ElvUI_Sirus, удалите его чтобы убрать проблемы с ElvUI \n (Принять, чтобы выключить модуль и перезагрузить интерфейс)",
+	button1 = ACCEPT,
+	button2 = CANCEL,
+	-- hideOnEscape = 1,
+	OnAccept = function() DisableAddOn("ElvUI_Sirus") ReloadUI() end,
+	-- whileDead = 1,
+}
+
 E.PopupDialogs.APPLY_FONT_WARNING = {
 	text = L["Are you sure you want to apply this font to all ElvUI elements?"],
 	OnAccept = function()
@@ -427,7 +443,9 @@ E.PopupDialogs.APPLY_FONT_WARNING = {
 		E.db.unitframe.font = font
 		--E.db.unitframe.fontSize = fontSize
 		E.db.unitframe.units.party.rdebuffs.font = font
-		E.db.unitframe.units.raid.rdebuffs.font = font
+		E.db.unitframe.units.raid10.rdebuffs.font = font
+		E.db.unitframe.units.raid25.rdebuffs.font = font
+		-- E.db.unitframe.units.raid.rdebuffs.font = font
 		E.db.unitframe.units.raid40.rdebuffs.font = font
 
 		E:UpdateAll(true)
@@ -795,7 +813,8 @@ function E:StaticPopup_OnEvent()
 end
 
 local tempButtonLocs = {} --So we don't make a new table each time.
-function E:StaticPopup_Show(which, text_arg1, text_arg2, data)
+
+function E:StaticPopup_Show(which, text_arg1, text_arg2, data, timed, t)
 	local info = E.PopupDialogs[which]
 	if not info then
 		return nil
@@ -1057,14 +1076,26 @@ function E:StaticPopup_Show(which, text_arg1, text_arg2, data)
 
 	-- Finally size and show the dialog
 	E:StaticPopup_SetUpPosition(dialog)
-	dialog:Show()
+	if timed then
+		local a = C_Timer:After(t and t or 3, function(self)
+			self.dialog:Show()
+			E:StaticPopup_Resize(self.dialog, self.which)
 
-	E:StaticPopup_Resize(dialog, which)
+			if self.info.sound then
+				PlaySound(self.info.sound)
+			end
+		end)
+		a.dialog = dialog
+		a.info = info
+		a.which = which
+	else
+		dialog:Show()
+		E:StaticPopup_Resize(dialog, which)
 
-	if info.sound then
-		PlaySound(info.sound)
+		if info.sound then
+			PlaySound(info.sound)
+		end
 	end
-
 	return dialog
 end
 

@@ -1,0 +1,91 @@
+name: Send repo archive to Discord on push
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discord-zip-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  zip-and-send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create ZIP from current commit (exclude .github)
+        id: make_zip
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"         # owner/repo -> repo
+          BRANCH="${GITHUB_REF_NAME}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          ZIP_NAME="${REPO_NAME}-${BRANCH}-${SHORT_SHA}.zip"
+
+          git archive --format=zip -o "$ZIP_NAME" HEAD -- . ':(exclude).github'
+
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+          size=$(stat -c%s "$ZIP_NAME")
+          echo "size=$size" >> $GITHUB_OUTPUT
+          if [ "$size" -lt 24000000 ]; then
+            echo "small=true" >> $GITHUB_OUTPUT
+          else
+            echo "small=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send to Discord (attach)
+        if: steps.make_zip.outputs.small == 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_ELVUI }}
+        run: |
+          COMMIT_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          BRANCH="${GITHUB_REF_NAME}"
+          curl -s -X POST \
+            -F "content=🟢 Новый коммит в ${GITHUB_REPOSITORY} (${BRANCH}): <${COMMIT_URL}> \
+            -F "file=@$ZIP_NAME" \
+            "$WEBHOOK_URL"
+
+      - name: Create GitHub release (fallback for big ZIP)
+        id: create_release
+        if: steps.make_zip.outputs.small != 'true'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: auto-${{ github.ref_name }}-${{ github.sha }}
+          release_name: Auto archive ${{ github.ref_name }} ${{ github.sha }}
+          body: "Auto-archive for commit ${{ github.sha }} on ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload ZIP to release
+        if: steps.make_zip.outputs.small != 'true'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.ZIP_NAME }}
+          asset_name: ${{ env.ZIP_NAME }}
+          asset_content_type: application/zip
+
+      - name: Notify Discord with release link
+        if: steps.make_zip.outputs.small != 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_ELVUI }}
+        run: |
+          COMMIT_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          REL_TAG="auto-${GITHUB_REF_NAME}-${GITHUB_SHA}"
+          REL_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${REL_TAG}"
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\":\"🟡 Новый коммит: <${COMMIT_URL}>\\nАрхив слишком большой для вложения. Скачайте из релиза: ${REL_URL}\"}" \
+            "$WEBHOOK_URL"
