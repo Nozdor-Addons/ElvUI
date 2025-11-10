@@ -35,26 +35,39 @@ S:AddCallback("Skin_BlizzardOptions", function()
 	end
 
 	-- Interface Options Frame
-	local frames = {
-		InterfaceOptionsFrame,
-		AudioOptionsFrame,
-		VideoOptionsFrame
-	}
-	for _, frame in ipairs(frames) do
-		frame:SetTemplate("Transparent")
-		frame:SetClampedToScreen(true)
-		frame:SetMovable(true)
-		frame:EnableMouse(true)
-		frame:RegisterForDrag("LeftButton", "RightButton")
-		frame:SetScript("OnDragStart", function(self)
-			if InCombatLockdown() then return end
+	local function MakeMovableViaHeader(frame, header)
+	frame:SetTemplate("Transparent")
+	frame:SetClampedToScreen(true)
+	frame:SetMovable(true)
+	frame:SetFrameStrata("DIALOG")
+	frame:SetFrameLevel(1)
+	frame:EnableMouse(false)
 
-			self:StartMoving()
+		if frame.backdrop then
+			frame.backdrop:EnableMouse(false)
+			frame.backdrop:SetFrameLevel(0)
+		end
+
+		local drag = CreateFrame("Frame", nil, frame)
+		if header then
+			drag:SetAllPoints(header)
+		else
+			drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+			drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+			drag:SetHeight(28)
+		end
+
+		drag:EnableMouse(true)
+		drag:RegisterForDrag("LeftButton")
+		drag:SetScript("OnDragStart", function()
+			if not InCombatLockdown() then frame:StartMoving() end
 		end)
-		frame:SetScript("OnDragStop", function(self)
-			self:StopMovingOrSizing()
-		end)
-	end
+		drag:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
+		end
+
+	MakeMovableViaHeader(InterfaceOptionsFrame, InterfaceOptionsFrameHeader)
+	MakeMovableViaHeader(AudioOptionsFrame, AudioOptionsFrameHeader)
+	MakeMovableViaHeader(VideoOptionsFrame, VideoOptionsFrameHeader)
 
 	local optionHeaders = {
 		InterfaceOptionsFrameHeader,
@@ -90,11 +103,19 @@ S:AddCallback("Skin_BlizzardOptions", function()
 			frame:CreateBackdrop("Transparent")
 
 			if frame == VideoOptionsFramePanelContainer or frame == InterfaceOptionsFramePanelContainer then
-				frame.backdrop:SetPoint("TOPLEFT", 0, 0)
-				frame.backdrop:SetPoint("BOTTOMRIGHT", 0, 0)
+			frame.backdrop:SetPoint("TOPLEFT", 0, 0)
+			frame.backdrop:SetPoint("BOTTOMRIGHT", 0, 0)
+
+			frame.backdrop:SetFrameStrata("BACKGROUND")
+			frame.backdrop:SetFrameLevel(0)
+			frame.backdrop:EnableMouse(false)
+
+			frame:SetFrameLevel(1)
+			frame:EnableMouse(false)
+			frame:EnableMouseWheel(false)
 			else
-				frame.backdrop:Point("TOPLEFT", -1, 0)
-				frame.backdrop:Point("BOTTOMRIGHT", 0, 1)
+			frame.backdrop:Point("TOPLEFT", -1, 0)
+			frame.backdrop:Point("BOTTOMRIGHT", 0, 1)
 			end
 		end
 	end
@@ -614,5 +635,14 @@ S:AddCallback("Skin_BlizzardOptions", function()
 				S:HandleColorSwatch(_G[nameString..index.."ColorSwatch"])
 			end
 		end
+	end)
+	hooksecurefunc("InterfaceOptionsFrame_OpenToCategory", function(panel)
+    local c = _G.InterfaceOptionsFramePanelContainer
+    if panel and c and panel.SetFrameLevel then
+    	panel:SetFrameLevel((c:GetFrameLevel() or 1) + 5)
+   		if panel.backdrop and panel.backdrop.SetFrameLevel then
+     		panel.backdrop:SetFrameLevel(panel:GetFrameLevel())
+    	end
+  	end
 	end)
 end)

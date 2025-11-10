@@ -143,6 +143,52 @@ local function ReplaceRightText(tt, leftLabel, newRight)
     return false
 end
 
+local function ColorizeRightByLabel(tt, leftLabel, r, g, b)
+    if not (tt and tt:GetName() and r and g and b) then return end
+    for i = 1, tt:NumLines() do
+        local L = _G[tt:GetName().."TextLeft"..i]
+        local R = _G[tt:GetName().."TextRight"..i]
+        if L and R and L:GetText() == leftLabel then
+            R:SetTextColor(r, g, b)
+            R:Show()
+            return
+        end
+    end
+end
+
+local function GetRightText(tt, leftLabel)
+    if not (tt and tt:GetName()) then return nil end
+    for i = 1, tt:NumLines() do
+        local L = _G[tt:GetName().."TextLeft"..i]
+        local R = _G[tt:GetName().."TextRight"..i]
+        if L and R then
+            local lt = L:GetText()
+            if lt and (lt == leftLabel or lt:find("Item Level", 1, true) or lt:find("Уровень предмет", 1, true) or lt:find("Ур%. предмет", 1, true)) then
+                local rt = R:GetText()
+                if rt and rt ~= "" then
+                    return rt
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function ExtractIlvlFromTooltip(tt)
+    local rt = GetRightText(tt, LABEL_ILVL)
+    if not rt then
+        rt = GetRightText(tt, "Item Level") or GetRightText(tt, "Уровень предмет") or GetRightText(tt, "Ур. предмет")
+    end
+    if rt then
+        local n = tonumber((rt:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")):match("(%d+)$"))
+        if n then
+            local color = GetItemLevelColor(n)
+            return color and (string.format("%s%d|r", E:RGBToHex(color.r, color.g, color.b), n)) or tostring(n)
+        end
+    end
+    return nil
+end
+
 function TT:GetItemLvL(unit, guid)
     local ilvl = ItemLevelMixIn:GetItemLevel(guid or UnitGUID(unit))
     if ilvl and ilvl ~= -1 then
@@ -371,6 +417,14 @@ function TT:INSPECT_TALENT_READY(event, unit)
     if specName then
         inspectCache[self.lastGUID].specName = specName
         ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+		do
+				local _, tooltipUnit = GameTooltip:GetUnit()
+				if tooltipUnit and UnitIsPlayer(tooltipUnit) then
+					local _, class = UnitClass(tooltipUnit)
+					local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or RAID_CLASS_COLORS[class] or RAID_CLASS_COLORS.PRIEST
+					ColorizeRightByLabel(GameTooltip, LABEL_SPEC, c.r, c.g, c.b)
+				end
+			end
     end
     if itemLevel then
         inspectCache[self.lastGUID].itemLevel = itemLevel
@@ -395,6 +449,14 @@ function TT:INSPECT_READY(_, guid)
         inspectCache[guid].specName = specName
         inspectCache[guid].time = GetTime()
         ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+		do
+				local _, tooltipUnit = GameTooltip:GetUnit()
+				if tooltipUnit and UnitIsPlayer(tooltipUnit) then
+					local _, class = UnitClass(tooltipUnit)
+					local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or RAID_CLASS_COLORS[class] or RAID_CLASS_COLORS.PRIEST
+					ColorizeRightByLabel(GameTooltip, LABEL_SPEC, c.r, c.g, c.b)
+				end
+		end
     end
 
     if GameTooltip:IsShown() then GameTooltip:Show() end
@@ -405,10 +467,31 @@ end
 
 function TT:ShowInspectInfo(tt, unit, r, g, b)
     local GUID = UnitGUID(unit)
+	local tooltipIlvl = ExtractIlvlFromTooltip(tt)
+	if tooltipIlvl then
+		inspectCache[GUID] = inspectCache[GUID] or {}
+		inspectCache[GUID].itemLevel = tooltipIlvl
+		inspectCache[GUID].time = GetTime()
+		TT._ilvlReadyByGUID[GUID] = true
+
+		tt:AddDoubleLine(LABEL_SPEC, LOADING_LABEL, nil, nil, nil, r, g, b)
+		tt:AddDoubleLine(LABEL_ILVL, tooltipIlvl)
+		if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= GUID then
+			TT._pendingGUID = GUID
+			self.lastGUID = GUID
+			EnsureTalentAPIReady()
+			pcall(SetInspectTarget, unit)
+			NotifyInspect(unit)
+			self:RegisterEvent("INSPECT_TALENT_READY")
+			self:RegisterEvent("INSPECT_READY")
+		end
+		return
+	end
 
     if GUID == E.myguid then
         local _, specName = E:GetTalentSpecInfo()
 			tt:AddDoubleLine(LABEL_SPEC, specName, nil, nil, nil, r, g, b)
+			ColorizeRightByLabel(tt, LABEL_SPEC, r, g, b)
 			tt:AddDoubleLine(LABEL_ILVL, self:GetItemLvL("player"))
         return
     end
@@ -421,6 +504,7 @@ if GUID and inspectCache[GUID] then
 
     if fresh and (spec or ilvl) then
 		tt:AddDoubleLine(LABEL_SPEC, spec or LOADING_LABEL, nil, nil, nil, r, g, b)
+		ColorizeRightByLabel(tt, LABEL_SPEC, r, g, b)
 		tt:AddDoubleLine(LABEL_ILVL, ilvl or LOADING_LABEL)
 
 			if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= GUID and (not spec or not ilvl) then
@@ -440,6 +524,14 @@ if GUID and inspectCache[GUID] then
             inspectCache[GUID].specName = specName
             inspectCache[GUID].time = GetTime()
             ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+			do
+				local _, tooltipUnit = GameTooltip:GetUnit()
+				if tooltipUnit and UnitIsPlayer(tooltipUnit) then
+					local _, class = UnitClass(tooltipUnit)
+					local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or RAID_CLASS_COLORS[class] or RAID_CLASS_COLORS.PRIEST
+					ColorizeRightByLabel(GameTooltip, LABEL_SPEC, c.r, c.g, c.b)
+				end
+			end
             GameTooltip:Show()
         end
     end
@@ -449,6 +541,7 @@ end)
     end
 end
 tt:AddDoubleLine(LABEL_SPEC, LOADING_LABEL, nil, nil, nil, r, g, b)
+ColorizeRightByLabel(tt, LABEL_SPEC, r, g, b)
 tt:AddDoubleLine(LABEL_ILVL, LOADING_LABEL)
 if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= GUID then
     TT._pendingGUID = GUID
@@ -467,6 +560,14 @@ if not UnitIsEnemy("player", unit) and CanInspect(unit) and TT._pendingGUID ~= G
             inspectCache[GUID].specName = specName
             inspectCache[GUID].time = GetTime()
             ReplaceRightText(GameTooltip, LABEL_SPEC, specName)
+			do
+				local _, tooltipUnit = GameTooltip:GetUnit()
+				if tooltipUnit and UnitIsPlayer(tooltipUnit) then
+					local _, class = UnitClass(tooltipUnit)
+					local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or RAID_CLASS_COLORS[class] or RAID_CLASS_COLORS.PRIEST
+					ColorizeRightByLabel(GameTooltip, LABEL_SPEC, c.r, c.g, c.b)
+				end
+			end
             GameTooltip:Show()
         end
     end
@@ -557,7 +658,12 @@ function TT:GameTooltip_OnTooltipSetUnit(tt)
 			if not TT._inRefresh and not UnitIsEnemy("player", unit) then
 				local guid = UnitGUID(unit)
 				if guid and TT._pendingGUID ~= guid then
-					ItemLevelMixIn:Request(unit)
+					if not TT._inRefresh and not UnitIsEnemy("player", unit) then
+						local guid = UnitGUID(unit)
+						if guid and TT._pendingGUID ~= guid and not TT._ilvlReadyByGUID[guid] then
+							ItemLevelMixIn:Request(unit)
+						end
+					end
 				end
 			end
         end
