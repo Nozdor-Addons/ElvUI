@@ -90,12 +90,14 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 			animData.yStop = (animData.yStop + 8) * glyphBGScale
 		end
 
-		hooksecurefunc("GlyphFrame_StartSlotAnimation", function(slotID, duration, size)
-			local sparkle = _G["GlyphFrameSparkle"..slotID]
-			local animation = slotAnimations[slotID]
+		if type(GlyphFrame_StartSlotAnimation) == "function" then
+			hooksecurefunc("GlyphFrame_StartSlotAnimation", function(slotID, duration, size)
+				local sparkle = _G["GlyphFrameSparkle"..slotID]
+				local animation = slotAnimations[slotID]
 
-			sparkle:SetPoint(animation.point, animation.xStart, animation.yStart)
-			sparkle.animGroup.translate:SetOffset(animation.xStop - animation.xStart, animation.yStop - animation.yStart)
-		end)
+				sparkle:SetPoint(animation.point, animation.xStart, animation.yStart)
+				sparkle.animGroup.translate:SetOffset(animation.xStop - animation.xStart, animation.yStop - animation.yStart)
+			end)
+		end
 	end
 end)
