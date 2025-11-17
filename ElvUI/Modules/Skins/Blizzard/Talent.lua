@@ -149,9 +149,21 @@ S:AddCallbackForAddon("Blizzard_TalentUI", "Skin_Blizzard_TalentUI", function()
 	end
 	if hooksecurefunc then
 		hooksecurefunc("ShowUIPanel", function(frame)
-			if frame == _G.CharacterFrame or frame == _G.PlayerTalentFrame then
+			if frame == _G.CharacterFrame or frame == _G.PlayerTalentFrame or frame == _G.GlyphFrame then
 				EUI_AdjustCharacterFrame()
 			end
 		end)
+
+		if type(_G.PlayerGlyphTab_OnClick) == "function" then
+			hooksecurefunc("PlayerGlyphTab_OnClick", function()
+				EUI_AdjustCharacterFrame()
+			end)
+		end
+
+		if type(_G.PlayerTalentFrameTab_OnClick) == "function" then
+			hooksecurefunc("PlayerTalentFrameTab_OnClick", function()
+				EUI_AdjustCharacterFrame()
+			end)
+		end
 	end
 end)
