@@ -866,17 +866,86 @@ end)
 end
 
 local function EUI_ApplyCharacterDecor()
-	if CharacterFrame and CharacterFrame:IsShown() and _G.EUI_UpdateAllSlots then
-		_G.EUI_UpdateAllSlots()
-	end
+    if CharacterFrame and CharacterFrame:IsShown() and _G.EUI_UpdateAllSlots then
+        _G.EUI_UpdateAllSlots()
+    end
+end
+
+local EUI_CharFrameOrigPoint
+
+local function EUI_SaveCharFrameOrig()
+    local cf = _G.CharacterFrame
+    if not cf or not cf.GetPoint or cf:GetNumPoints() == 0 then return end
+    if EUI_CharFrameOrigPoint and EUI_CharFrameOrigPoint[2] then return end
+
+    local p, relTo, relPoint, x, y = cf:GetPoint(1)
+    local tf = _G.PlayerTalentFrame or _G.TalentFrame
+    if relTo == tf then return end
+
+    EUI_CharFrameOrigPoint = { p, relTo, relPoint, x, y }
+end
+
+local function EUI_RestoreCharFrame()
+    local cf = _G.CharacterFrame
+    if not cf or not EUI_CharFrameOrigPoint then return end
+    local p, relTo, relPoint, x, y = unpack(EUI_CharFrameOrigPoint)
+    cf:ClearAllPoints()
+    cf:SetPoint(p, relTo, relPoint, x, y)
+end
+
+local function EUI_UpdateCharFrameWithTalents()
+    local cf = _G.CharacterFrame
+    if not cf then return end
+
+    local tf = _G.PlayerTalentFrame or _G.TalentFrame
+
+    EUI_SaveCharFrameOrig()
+
+    if tf and tf:IsShown() and cf:IsShown() then
+        cf:ClearAllPoints()
+        cf:SetPoint("TOPLEFT", tf, "TOPRIGHT", 8, 0)
+    else
+        EUI_RestoreCharFrame()
+    end
+end
+
+local function EUI_HookTalentFrame()
+    local tf = _G.PlayerTalentFrame or _G.TalentFrame
+    if not tf or tf.__EUI_CharHooked then return end
+    tf.__EUI_CharHooked = true
+
+    tf:HookScript("OnShow", EUI_UpdateCharFrameWithTalents)
+    tf:HookScript("OnHide", EUI_UpdateCharFrameWithTalents)
+end
+
+EUI_HookTalentFrame()
+
+if hooksecurefunc then
+    hooksecurefunc("TalentFrame_LoadUI", EUI_HookTalentFrame)
 end
 
 if CharacterFrame and CharacterFrame.HookScript then
-	CharacterFrame:HookScript("OnShow", EUI_ApplyCharacterDecor)
+    CharacterFrame:HookScript("OnShow", function()
+        EUI_UpdateCharFrameWithTalents()
+        EUI_ApplyCharacterDecor()
+    end)
+else
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("PLAYER_LOGIN")
+    f:SetScript("OnEvent", function()
+        if CharacterFrame and CharacterFrame.HookScript then
+            CharacterFrame:HookScript("OnShow", function()
+                EUI_UpdateCharFrameWithTalents()
+                EUI_ApplyCharacterDecor()
+            end)
+        end
+        f:UnregisterAllEvents()
+    end)
 end
+
 if hooksecurefunc then
-	hooksecurefunc("PaperDollFrame_UpdateStats", EUI_ApplyCharacterDecor)
-	hooksecurefunc("PaperDollItemSlotButton_Update", EUI_ApplyCharacterDecor)
+    hooksecurefunc("PaperDollFrame_UpdateStats", EUI_ApplyCharacterDecor)
+    hooksecurefunc("PaperDollItemSlotButton_Update", EUI_ApplyCharacterDecor)
 end
 
 S:AddCallback("Skin_Character", LoadSkin)
