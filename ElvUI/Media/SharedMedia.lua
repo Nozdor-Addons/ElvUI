@@ -163,7 +163,8 @@ E.Media = {
 		Pelmen = M..[[ChatLogos\Pelmen.tga]],
 		useless = M..[[ChatLogos\useless.tga]],
 		Bronya = M..[[ChatLogos\bronya.tga]],
-		Koban = M..[[ChatLogos\Koban.tga]]
+		Koban = M..[[ChatLogos\Koban.tga]],
+		Paw = M..[[ChatLogos\Paw.tga]]
 	},
 	Textures = {
 		AllianceLogo = M..[[Textures\Alliance-Logo.blp]],

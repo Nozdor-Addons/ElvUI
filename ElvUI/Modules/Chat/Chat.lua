@@ -156,6 +156,7 @@ do --this can save some main file locals
 	local useless = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\useless]], ":24:24")
 	local Koban = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Koban]], ":24:24")
 	local Aileen = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Aileen]], ":24:24")
+	local Paw = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Paw]], ":24:24")
 
 	specialChatIcons = {
 		["Крольчонак-x100"] = ElvPink,
@@ -170,6 +171,7 @@ do --this can save some main file locals
 		["Вар-X5"] = Koban,
 		["Сова-X5"] = Koban,
 		["Aileen-X5"] = Aileen,
+		["Evilore-X5"] = Paw,
 	}
 end
 
