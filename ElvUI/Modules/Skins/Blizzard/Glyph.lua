@@ -59,12 +59,20 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 		PlayerTalentFrameScrollFrame:Hide()
 		PlayerTalentFrameStatusFrame:Hide()
 		PlayerTalentFrameActivateButton:Hide()
+
+		if PlayerTalentFrame.ElvUI_UpdateTalentOffset then
+			PlayerTalentFrame.ElvUI_UpdateTalentOffset(nil, nil, true)
+		end
 	end)
 
 	GlyphFrame:SetScript("OnHide", function()
 		PlayerTalentFrameTitleText:Show()
 		PlayerTalentFramePointsBar:Show()
 		PlayerTalentFrameScrollFrame:Show()
+
+		if PlayerTalentFrame.ElvUI_UpdateTalentOffset then
+			PlayerTalentFrame.ElvUI_UpdateTalentOffset(nil, nil, true)
+		end
 	end)
 
 	hooksecurefunc(PlayerTalentFrame, "updateFunction", function()

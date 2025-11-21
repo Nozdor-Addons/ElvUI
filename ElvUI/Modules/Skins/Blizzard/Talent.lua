@@ -16,28 +16,44 @@ S:AddCallbackForAddon("Blizzard_TalentUI", "Skin_Blizzard_TalentUI", function()
 
 	S:SetBackdropHitRect(PlayerTalentFrame)
 
-	do
-		local offset
 
-		local talentGroups = GetNumTalentGroups(false, false)
-		local petTalentGroups = GetNumTalentGroups(false, true)
+do
+		local TALENT_CHARFRAME_OFFSET = 211
 
-		if talentGroups + petTalentGroups > 1 then
-			S:SetUIPanelWindowInfo(PlayerTalentFrame, "width", nil, 31)
-			offset = true
-		else
-			S:SetUIPanelWindowInfo(PlayerTalentFrame, "width")
+		-- numTalentGroups, numPetTalentGroups
+		-- force = true
+		local function UpdateTalentFrameOffset(numTalentGroups, numPetTalentGroups, force)
+			if not numTalentGroups or not numPetTalentGroups then
+				numTalentGroups = GetNumTalentGroups(false, false)
+				numPetTalentGroups = GetNumTalentGroups(false, true)
+			end
+
+			local needOffset = (numTalentGroups + numPetTalentGroups) > 1
+
+			if needOffset then
+				if force or not PlayerTalentFrame.ElvUI_OffsetActive then
+					S:SetUIPanelWindowInfo(PlayerTalentFrame, "width", nil, TALENT_CHARFRAME_OFFSET)
+					PlayerTalentFrame.ElvUI_OffsetActive = true
+				end
+			else
+				if force or PlayerTalentFrame.ElvUI_OffsetActive then
+					S:SetUIPanelWindowInfo(PlayerTalentFrame, "width")
+					PlayerTalentFrame.ElvUI_OffsetActive = false
+				end
+			end
 		end
 
-		hooksecurefunc("PlayerTalentFrame_UpdateSpecs", function(_, numTalentGroups, _, numPetTalentGroups)
-			if offset and numTalentGroups + numPetTalentGroups <= 1 then
-				S:SetUIPanelWindowInfo(PlayerTalentFrame, "width")
-				offset = nil
-			elseif not offset and numTalentGroups + numPetTalentGroups > 1 then
-				S:SetUIPanelWindowInfo(PlayerTalentFrame, "width", nil, 31)
-				offset = true
-			end
-		end)
+		PlayerTalentFrame.ElvUI_UpdateTalentOffset = UpdateTalentFrameOffset
+
+		if not PlayerTalentFrame.ElvUI_TalentOffsetHooked then
+			PlayerTalentFrame.ElvUI_TalentOffsetHooked = true
+
+			hooksecurefunc("PlayerTalentFrame_UpdateSpecs", function(_, numTalentGroups, _, numPetTalentGroups)
+				UpdateTalentFrameOffset(numTalentGroups, numPetTalentGroups)
+			end)
+		end
+
+		UpdateTalentFrameOffset(nil, nil, true)
 	end
 
 	S:HandleCloseButton(PlayerTalentFrameCloseButton, PlayerTalentFrame.backdrop)
@@ -112,8 +128,8 @@ S:AddCallbackForAddon("Blizzard_TalentUI", "Skin_Blizzard_TalentUI", function()
 	PlayerTalentFrameScrollFrameScrollBar:Point("TOPLEFT", PlayerTalentFrameScrollFrame, "TOPRIGHT", 4, -18)
 	PlayerTalentFrameScrollFrameScrollBar:Point("BOTTOMLEFT", PlayerTalentFrameScrollFrame, "BOTTOMRIGHT", 4, 18)
 
-	--PlayerTalentFrameResetButton:Point("RIGHT", -4, 1)
-	--PlayerTalentFrameLearnButton:Point("RIGHT", PlayerTalentFrameResetButton, "LEFT", -3, 0)
+	PlayerTalentFrameResetButton:Point("RIGHT", -4, 1)
+	PlayerTalentFrameLearnButton:Point("RIGHT", PlayerTalentFrameResetButton, "LEFT", -3, 0)
 
 	PlayerSpecTab1:Point("TOPLEFT", PlayerTalentFrame, "TOPRIGHT", -33, -65)
 	PlayerSpecTab1.ClearAllPoints = E.noop
