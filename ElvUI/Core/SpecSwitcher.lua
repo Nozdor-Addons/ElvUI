@@ -3,10 +3,6 @@ local function SpecSwitcher_SetSpec(index)
     RequestServerAction(msg)
 end
 
-local function SpecSwitcher_ResetTalents()
-    RequestServerAction("10")
-end
-
 SLASH_SPECSWITCH1 = "/spec"
 
 SlashCmdList["SPECSWITCH"] = function(msg)
@@ -23,14 +19,14 @@ SlashCmdList["SPECSWITCH"] = function(msg)
 
     SpecSwitcher_SetSpec(idx)
 end
-
+--[[
 SLASH_RESETTALENTS1 = "/treset"
 SLASH_RESETTALENTS2 = "/resettalents"
 
 SlashCmdList["RESETTALENTS"] = function(msg)
     SpecSwitcher_ResetTalents()
 end
---[[
+
 local function TalentTest_Run()
     for i = 1, 1 do
         RequestServerAction("9|411:0")

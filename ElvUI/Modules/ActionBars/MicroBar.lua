@@ -7,6 +7,7 @@ local gsub, match = string.gsub, string.match
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local RegisterStateDriver = RegisterStateDriver
+local UnregisterStateDriver = UnregisterStateDriver
 
 local MICRO_BUTTONS = {
 	"CharacterMicroButton",
@@ -78,11 +79,7 @@ function AB:HandleMicroButton(button)
 end
 
 function AB:UpdateMicroButtonsParent()
-	if InCombatLockdown() then
-		AB.NeedsUpdateMicroButtonsParent = true
-		self:RegisterEvent("PLAYER_REGEN_ENABLED")
-		return
-	end
+	if not ElvUI_MicroBar then return end
 
 	for i = 1, #MICRO_BUTTONS do
 		local b = _G[MICRO_BUTTONS[i]]
@@ -92,7 +89,7 @@ function AB:UpdateMicroButtonsParent()
 		end
 	end
 
-	AB:UpdateMicroPositionDimensions()
+	self:UpdateMicroPositionDimensions()
 end
 
 function AB:UpdateMicroBarVisibility()
@@ -102,64 +99,112 @@ function AB:UpdateMicroBarVisibility()
 		return
 	end
 
-	local visibility = self.db.microbar.visibility
+	if not ElvUI_MicroBar or not ElvUI_MicroBar.visibility then return end
+
+	local db = self.db.microbar
+	local visibility = db.visibility
+
 	if visibility and match(visibility, "[\n\r]") then
 		visibility = gsub(visibility, "[\n\r]", "")
+		db.visibility = visibility
 	end
 
-	RegisterStateDriver(ElvUI_MicroBar.visibility, "visibility", (self.db.microbar.enabled and visibility) or "hide")
+	if not db.enabled then
+		UnregisterStateDriver(ElvUI_MicroBar.visibility, "visibility")
+		ElvUI_MicroBar:Hide()
+		return
+	end
+
+	if not visibility or visibility == "" or visibility == "show" then
+		UnregisterStateDriver(ElvUI_MicroBar.visibility, "visibility")
+		ElvUI_MicroBar.visibility:Show()
+		ElvUI_MicroBar:Show()
+	else
+		RegisterStateDriver(ElvUI_MicroBar.visibility, "visibility", visibility)
+	end
+end
+
+function AB:MicroBar_OnUpdate(elapsed)
+	if not self.db or not self.db.microbar or not self.db.microbar.enabled or not ElvUI_MicroBar then
+		if self.MicroBarFixFrame then
+			self.MicroBarFixFrame:Hide()
+		end
+		return
+	end
+
+	self.MicroBarFixElapsed = (self.MicroBarFixElapsed or 0) + elapsed
+	if self.MicroBarFixElapsed < 0.1 then
+		return
+	end
+	self.MicroBarFixElapsed = 0
+
+	self:UpdateMicroButtonsParent()
 end
 
 function AB:UpdateMicroPositionDimensions()
 	if not ElvUI_MicroBar then return end
 
+	local db = self.db.microbar
 	local numRows = 1
-	local prevButton = ElvUI_MicroBar
+	local index = 0
+	local usedButtons = {}
 	local offset = E:Scale(E.PixelMode and 1 or 3)
-	local spacing = E:Scale(offset + self.db.microbar.buttonSpacing)
+	local spacing = E:Scale(offset + db.buttonSpacing)
+	local buttonsPerRow = db.buttonsPerRow
+	local firstButtonWidth, firstButtonHeight = 0, 0
 
 	for i = 1, #MICRO_BUTTONS do
 		local button = _G[MICRO_BUTTONS[i]]
 		if button then
-			local lastColumnButton = i - self.db.microbar.buttonsPerRow
-			if lastColumnButton and lastColumnButton >= 1 then
-				lastColumnButton = _G[MICRO_BUTTONS[lastColumnButton]]
-			else
-				lastColumnButton = nil
-			end
+			index = index + 1
+			usedButtons[index] = button
 
 			local _bw = button._elv_baseW or button:GetWidth()
 			local _bh = button._elv_baseH or button:GetHeight()
-			local _w = self.db.microbar.buttonSize or _bw
-			local _h = (_bw > 0 and _bh > 0) and (_w * (_bh / _bw)) or (self.db.microbar.buttonSize * 1.4)
-			button:Size(_w, _h)
+
+			local width = (db.buttonWidth and db.buttonWidth > 0 and db.buttonWidth) or (db.buttonSize or _bw)
+			local height = (db.buttonHeight and db.buttonHeight > 0 and db.buttonHeight) or ((db.buttonSize and (db.buttonSize * 1.4)) or _bh)
+
+			button:Size(width, height)
 			button:ClearAllPoints()
 
-			if prevButton == ElvUI_MicroBar then
-				button:Point("TOPLEFT", prevButton, "TOPLEFT", offset, -offset)
-			elseif (i - 1) % self.db.microbar.buttonsPerRow == 0 then
+			if index == 1 then
+				button:Point("TOPLEFT", ElvUI_MicroBar, "TOPLEFT", offset, -offset)
+			elseif (index - 1) % buttonsPerRow == 0 then
+				local lastColumnButton = usedButtons[index - buttonsPerRow]
 				button:Point("TOP", lastColumnButton, "BOTTOM", 0, -spacing)
 				numRows = numRows + 1
 			else
+				local prevButton = usedButtons[index - 1]
 				button:Point("LEFT", prevButton, "RIGHT", spacing, 0)
 			end
 
-			prevButton = button
+			if index == 1 then
+				firstButtonWidth = button:GetWidth()
+				firstButtonHeight = button:GetHeight()
+			end
 		end
 	end
 
 	if AB.db.microbar.mouseover and not ElvUI_MicroBar:IsMouseOver() then
 		ElvUI_MicroBar:SetAlpha(0)
 	else
-		ElvUI_MicroBar:SetAlpha(self.db.microbar.alpha)
+		ElvUI_MicroBar:SetAlpha(db.alpha)
 	end
 
-	AB.MicroWidth = (((CharacterMicroButton:GetWidth() + spacing) * self.db.microbar.buttonsPerRow) - spacing) + (offset * 2)
-	AB.MicroHeight = (((CharacterMicroButton:GetHeight() + spacing) * numRows) - spacing) + (offset * 2)
+	if index == 0 then
+		ElvUI_MicroBar:Size(1, 1)
+		return
+	end
+
+	local buttonsInRow = (index > buttonsPerRow) and buttonsPerRow or index
+
+	AB.MicroWidth = (((firstButtonWidth + spacing) * buttonsInRow) - spacing) + (offset * 2)
+	AB.MicroHeight = (((firstButtonHeight + spacing) * numRows) - spacing) + (offset * 2)
 	ElvUI_MicroBar:Size(AB.MicroWidth, AB.MicroHeight)
 
 	if ElvUI_MicroBar.mover then
-		if self.db.microbar.enabled then
+		if db.enabled then
 			E:EnableMover(ElvUI_MicroBar.mover:GetName())
 		else
 			E:DisableMover(ElvUI_MicroBar.mover:GetName())
@@ -173,11 +218,7 @@ local function microEvents(_, event, unit)
 	if event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
 		if unit ~= "player" then return end
 	end
-	if InCombatLockdown() then
-		AB.NeedsUpdateMicroButtonsParent = true
-		AB:RegisterEvent("PLAYER_REGEN_ENABLED")
-		return
-	end
+
 	AB:UpdateMicroButtonsParent()
 end
 
@@ -231,4 +272,15 @@ function AB:SetupMicroBar()
 	E:CreateMover(microBar, "MicrobarMover", L["Micro Bar"], nil, nil, nil, "ALL,ACTIONBARS", nil, "actionbar,microbar")
 
 	self:UpdateMicroButtonsParent()
+
+	if not AB.MicroBarFixFrame then
+		local fix = CreateFrame("Frame", nil, microBar)
+		AB.MicroBarFixFrame = fix
+		fix:SetScript("OnUpdate", function(_, elapsed)
+			AB:MicroBar_OnUpdate(elapsed)
+		end)
+	else
+		AB.MicroBarFixFrame:SetParent(microBar)
+		AB.MicroBarFixFrame:Show()
+	end
 end
