@@ -374,13 +374,13 @@ function E:SetupLayout(layout, noDataReset, noDisplayMsg)
 		E.db.unitframe.units.raid10 = E.db.unitframe.units.raid10 or {}
 		E:CopyTable(E.db.unitframe.units.raid10, E.db.unitframe.units.raid)
 		E.db.unitframe.units.raid10.numGroups = 2
-		E.db.unitframe.units.raid10.visibility = "[@raid6,noexists] hide;show"
+		E.db.unitframe.units.raid10.visibility = "[@raid11,exists]hide; [@raid6,exists]show; hide"
 
 			--Raid25
 		E.db.unitframe.units.raid25 = E.db.unitframe.units.raid25 or {}
 		E:CopyTable(E.db.unitframe.units.raid25, E.db.unitframe.units.raid)
 		E.db.unitframe.units.raid25.numGroups = 5
-		E.db.unitframe.units.raid25.visibility = "[@raid6,noexists] hide;show"
+		E.db.unitframe.units.raid25.visibility = "[@raid26,exists]hide; [@raid11,exists]show; hide"
 
 			--Raid40
 		E.db.unitframe.units.raid40.enable = false
