@@ -369,9 +369,23 @@ function E:SetupLayout(layout, noDataReset, noDisplayMsg)
 		E.db.unitframe.units.raid.resurrectIcon.attachTo = "BOTTOMRIGHT"
 		E.db.unitframe.units.raid.visibility = "[@raid6,noexists] hide;show"
 		E.db.unitframe.units.raid.width = 92
+
+			--Raid10
+		E.db.unitframe.units.raid10 = E.db.unitframe.units.raid10 or {}
+		E:CopyTable(E.db.unitframe.units.raid10, E.db.unitframe.units.raid)
+		E.db.unitframe.units.raid10.numGroups = 2
+		E.db.unitframe.units.raid10.visibility = "[@raid6,noexists] hide;show"
+
+			--Raid25
+		E.db.unitframe.units.raid25 = E.db.unitframe.units.raid25 or {}
+		E:CopyTable(E.db.unitframe.units.raid25, E.db.unitframe.units.raid)
+		E.db.unitframe.units.raid25.numGroups = 5
+		E.db.unitframe.units.raid25.visibility = "[@raid6,noexists] hide;show"
+
 			--Raid40
 		E.db.unitframe.units.raid40.enable = false
 		E.db.unitframe.units.raid40.rdebuffs.font = "PT Sans Narrow"
+
 
 		--[[
 		--	Layout Tweaks will be handled below.
