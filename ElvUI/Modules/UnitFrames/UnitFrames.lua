@@ -557,27 +557,6 @@ end
 
 function UF.groupPrototype:Configure_Groups(frame)
 	local db = UF.db.units[frame.groupName]
-	if not db then
-        db = {}
-        UF.db.units[frame.groupName] = db
-
-        if UF.db.units.raid then
-            E:CopyTable(db, UF.db.units.raid)
-        end
-    end
-
-    db.width            = db.width            or 80
-    db.height           = db.height           or 30
-    db.groupsPerRowCol  = db.groupsPerRowCol  or 1
-    db.horizontalSpacing = db.horizontalSpacing or 0
-    db.verticalSpacing   = db.verticalSpacing   or 0
-    db.groupSpacing      = db.groupSpacing      or 0
-
-    db.infoPanel = db.infoPanel or {}
-    db.infoPanel.height = db.infoPanel.height or 0
-    if db.infoPanel.enable == nil then
-        db.infoPanel.enable = false
-    end
 
 	local point
 	local width, height, newCols, newRows = 0, 0, 0, 0

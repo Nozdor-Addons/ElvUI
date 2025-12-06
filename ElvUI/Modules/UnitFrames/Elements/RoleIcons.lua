@@ -55,45 +55,29 @@ function UF:UpdateRoleIcon(event)
 end
 
 function UF:Configure_RoleIcon(frame)
-    local role = frame.GroupRoleIndicator
-    local db = frame.db or {}
+	local role = frame.GroupRoleIndicator
+	local db = frame.db
 
-    db.roleIcon = db.roleIcon or {}
-    frame.db = db
+	if db.roleIcon.enable then
+		frame:EnableElement("GroupRoleIndicator")
+		local attachPoint = self:GetObjectAnchorPoint(frame, db.roleIcon.attachTo)
 
-    local rdb = db.roleIcon
-    if rdb.enable == nil then
-        rdb.enable   = false
-    end
-    rdb.position    = rdb.position    or "BOTTOM"
-    rdb.attachTo    = rdb.attachTo    or "Health"
-    rdb.xOffset     = rdb.xOffset     or 0
-    rdb.yOffset     = rdb.yOffset     or 2
-    rdb.size        = rdb.size        or 17
-    rdb.tank        = (rdb.tank    ~= false)
-    rdb.healer      = (rdb.healer  ~= false)
-    rdb.damager     = (rdb.damager ~= false)
+		role:ClearAllPoints()
+		role:Point(db.roleIcon.position, attachPoint, db.roleIcon.position, db.roleIcon.xOffset, db.roleIcon.yOffset)
+		role:Size(db.roleIcon.size)
 
-    if rdb.enable then
-        frame:EnableElement("GroupRoleIndicator")
-        local attachPoint = self:GetObjectAnchorPoint(frame, rdb.attachTo)
-
-        role:ClearAllPoints()
-        role:Point(rdb.position, attachPoint, rdb.position, rdb.xOffset, rdb.yOffset)
-        role:Size(rdb.size)
-
-    --	if rdb.combatHide then
-    --		E:RegisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
-    --		E:RegisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
-    --	else
-    --		E:UnregisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
-    --		E:UnregisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
-    --	end
-    else
-        frame:DisableElement("GroupRoleIndicator")
-        role:Hide()
-        --Unregister combat hide events
-    --	E:UnregisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
-    --	E:UnregisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
-    end
+	--	if db.roleIcon.combatHide then
+	--		E:RegisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
+	--		E:RegisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
+	--	else
+	--		E:UnregisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
+	--		E:UnregisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
+	--	end
+	else
+		frame:DisableElement("GroupRoleIndicator")
+		role:Hide()
+		--Unregister combat hide events
+	--	E:UnregisterEventForObject("PLAYER_REGEN_ENABLED", frame, UF.UpdateRoleIcon)
+	--	E:UnregisterEventForObject("PLAYER_REGEN_DISABLED", frame, UF.UpdateRoleIcon)
+	end
 end
