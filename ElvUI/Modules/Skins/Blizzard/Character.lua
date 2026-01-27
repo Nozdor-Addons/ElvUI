@@ -48,6 +48,13 @@ local function LoadSkin()
 	if _G.CharacterFrame and _G.CharacterFrame.backdrop and _G.CharacterFrame.backdrop.SetAllPoints then
 		_G.CharacterFrame.backdrop:SetAllPoints(_G.CharacterFrame)
 	end
+    if _G.CharacterFrame and _G.CharacterFrame.backdrop then
+        local cf = _G.CharacterFrame
+        local bd = cf.backdrop
+
+        bd:SetFrameStrata(cf:GetFrameStrata() or "MEDIUM")
+        bd:SetFrameLevel(math_max((cf:GetFrameLevel() or 1) - 2, 0))
+    end
 
 	if S.HandlePortraitFrame and _G.CharacterFrame then
 		S:HandlePortraitFrame(_G.CharacterFrame)
@@ -177,7 +184,10 @@ end
 					icon:SetTexCoord(unpack(E.TexCoords))
 				end
 				if slotFrame.SetFrameLevel then
-					slotFrame:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 2)
+					slotFrame:SetFrameLevel((_G.PaperDollFrame:GetFrameLevel() or 1) + 10)
+                    if slotFrame.backdrop then
+                        slotFrame.backdrop:SetFrameLevel(slotFrame:GetFrameLevel() + 1)
+                    end
 				end
 				if i ~= 20 then
 					local cooldown = _G[slotFrameName.."Cooldown"]
@@ -207,6 +217,10 @@ end
 			local tab = _G["PaperDollFrameTab"..i]
 			if not tab then break end
 			SafeHandleTab(tab)
+            tab:SetFrameLevel((_G.CharacterFrame:GetFrameLevel() or 1) + 20)
+            if tab.backdrop then
+                tab.backdrop:SetFrameLevel(tab:GetFrameLevel() - 1)
+            end
 			tab:ClearAllPoints()
 			if i == 1 then
 				tab:SetPoint("BOTTOMLEFT", _G.CharacterFrame, "BOTTOMLEFT", 0, -1)
@@ -229,7 +243,7 @@ end
 			tab:StripTextures()
 			tab:CreateBackdrop("Default", true)
 			tab.backdrop:Point("TOPLEFT", 2, -7)
-			tab.backdrop:Point("BOTTOMRIGHT", -1, -1)
+			tab.backdrop:Point("BOTTOMRIGHT", -1, -10)
 			if S.SetBackdropHitRect then S:SetBackdropHitRect(tab) end
 			if tab.HookScript then
 				tab:HookScript("OnEnter", S.SetModifiedBackdrop)

@@ -4,7 +4,7 @@ local S = E:GetModule("Skins")
 --Lua functions
 local _G = _G
 local unpack = unpack
---WoW API / Variables
+local type = type
 
 S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 	if not E.private.skins.blizzard.enable or not E.private.skins.blizzard.talent then return end
@@ -13,46 +13,88 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 		TalentFrame_LoadUI()
 	end
 
+	-- Keep Blizzard's parchment texture; just remove ElvUI's full-frame textures
 	GlyphFrame:StripTextures()
 
-	GlyphFrameBackground:Size(323, 349)
-	GlyphFrameBackground:Point("TOPLEFT", 20, -59)
-	GlyphFrameBackground:CreateBackdrop()
+	-- ==== TUNING ====
+	-- Size of the parchment area (and the layout radius) relative to Blizzard's default
+	local paperScale = 0.97   -- 0.90..0.98 are usually nice
+	-- Size of the glyph buttons relative to default
+	local slotScale  = 0.94   -- keep close to paperScale
+	-- Vertical nudge for the whole parchment block (helps center it visually)
+	local yOffset    = 6
+	-- =================
 
-	S:HookScript(GlyphFrame, "OnShow", function(self)
-		S:SetBackdropHitRect(self, PlayerTalentFrame.backdrop)
-		S:Unhook(self, "OnShow")
-	end)
+	-- Base size used by Blizzard/ElvUI skin in 3.3.5
+	local baseW, baseH = 323, 349
 
+	-- Create a real frame to hold parchment + buttons.
+	-- IMPORTANT: Buttons cannot be parented to a Texture, only a Frame.
+	local holder = _G.GlyphFrameElvUIHolder
+	if not holder then
+		holder = CreateFrame("Frame", "GlyphFrameElvUIHolder", GlyphFrame)
+	end
+	holder:ClearAllPoints()
+	holder:SetPoint("CENTER", GlyphFrame, "CENTER", 0, yOffset)
+	holder:SetSize(baseW * paperScale, baseH * paperScale)
+	holder:SetFrameLevel(GlyphFrame:GetFrameLevel() + 1)
+
+	-- Parchment texture
+	GlyphFrameBackground:ClearAllPoints()
+	GlyphFrameBackground:SetParent(holder)
+	GlyphFrameBackground:SetAllPoints(holder)
+	GlyphFrameBackground:SetDrawLayer("BACKGROUND", 0)
 	GlyphFrameBackground:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
-	GlyphFrameGlow:SetTexture("Interface\\Spellbook\\UI-GlyphFrame-Glow")
-	GlyphFrameGlow:SetAllPoints(GlyphFrameBackground)
-
 	-- texWidth, texHeight, cropWidth, cropHeight, offsetX, offsetY = 512, 512, 315, 340, 21, 72
 	GlyphFrameBackground:SetTexCoord(0.041015625, 0.65625, 0.140625, 0.8046875)
 
+	-- Glow
+	GlyphFrameGlow:ClearAllPoints()
+	GlyphFrameGlow:SetParent(holder)
+	GlyphFrameGlow:SetAllPoints(holder)
+	GlyphFrameGlow:SetDrawLayer("BACKGROUND", 1)
+	GlyphFrameGlow:SetTexture("Interface\\Spellbook\\UI-GlyphFrame-Glow")
 	-- texWidth, texHeight, cropWidth, cropHeight, offsetX, offsetY = 512, 512, 315, 340, 30, 34
 	GlyphFrameGlow:SetTexCoord(0.05859375, 0.673828125, 0.06640625, 0.73046875)
 
-	local glyphBGScale = 1.0253968
+	-- Positions are relative to CENTER of parchment.
+	-- We scale the offsets with paperScale, and scale the buttons with slotScale.
 	local glyphPositions = {
-		{"CENTER", -1, 126},
-		{"CENTER", -1, -119},
-		{"TOPLEFT", 8, -62},
-		{"BOTTOMRIGHT", -10, 70},
-		{"TOPRIGHT", -8, -62},
-		{"BOTTOMLEFT", 7, 70}
+		{"CENTER", -1, 126},   -- 1 top
+		{"CENTER", -1, -119},  -- 2 bottom
+		{"TOPLEFT", 8, -62},   -- 3 top-left
+		{"BOTTOMRIGHT", -10, 70}, -- 4 bottom-right
+		{"TOPRIGHT", -8, -62}, -- 5 top-right
+		{"BOTTOMLEFT", 7, 70}  -- 6 bottom-left
 	}
 
-	local glyphFrameLevel = GlyphFrame:GetFrameLevel() + 1
-	for i = 1, 6 do
-		local frame = _G["GlyphFrameGlyph"..i]
-		frame:SetParent(GlyphFrameBackground.backdrop)
-		frame:SetFrameLevel(glyphFrameLevel)
-		frame:SetScale(glyphBGScale)
-		frame:Point(unpack(glyphPositions[i]))
+	local function ApplyGlyphLayout()
+		local glyphFrameLevel = holder:GetFrameLevel() + 5
+
+		for i = 1, 6 do
+			local btn = _G["GlyphFrameGlyph"..i]
+			if btn then
+				btn:SetParent(holder) -- parent MUST be a Frame (not a Texture)
+				btn:SetFrameLevel(glyphFrameLevel)
+				btn:SetScale(slotScale)
+
+				btn:ClearAllPoints()
+				local p, x, y = glyphPositions[i][1], glyphPositions[i][2], glyphPositions[i][3]
+				btn:SetPoint(p, holder, p, x * paperScale, y * paperScale)
+			end
+		end
 	end
 
+	ApplyGlyphLayout()
+
+	-- Re-apply after Blizzard updates the glyph frame (prevents drift/overlap)
+	hooksecurefunc("GlyphFrame_Update", function()
+		if GlyphFrame and GlyphFrame:IsShown() then
+			ApplyGlyphLayout()
+		end
+	end)
+
+	-- Keep the original ElvUI behavior hiding Talent UI bits while glyph tab is open
 	GlyphFrame:HookScript("OnShow", function()
 		PlayerTalentFrameTitleText:Hide()
 		PlayerTalentFramePointsBar:Hide()
@@ -80,32 +122,4 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 			PlayerTalentFramePreviewBar:Hide()
 		end
 	end)
-
-	do
-		local slotAnimations = {}
-		local TOPLEFT, TOP, TOPRIGHT, BOTTOMRIGHT, BOTTOM, BOTTOMLEFT = 3, 1, 5, 4, 2, 6
-		slotAnimations[TOPLEFT] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = -85, ["yStart"] = 17, ["yStop"] = 60}
-		slotAnimations[TOP] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = -13, ["yStart"] = 17, ["yStop"] = 100}
-		slotAnimations[TOPRIGHT] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = 59, ["yStart"] = 17, ["yStop"] = 60}
-		slotAnimations[BOTTOM] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = -13, ["yStart"] = 17, ["yStop"] = -64}
-		slotAnimations[BOTTOMLEFT] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = -87, ["yStart"] = 18, ["yStop"] = -27}
-		slotAnimations[BOTTOMRIGHT] = {["point"] = "CENTER", ["xStart"] = -13, ["xStop"] = 61, ["yStart"] = 18, ["yStop"] = -27}
-
-		for _, animData in ipairs(slotAnimations) do
-			animData.xStart = animData.xStart + 3
-			animData.yStart = animData.yStart + 8
-			animData.xStop = (animData.xStop + 3) * glyphBGScale
-			animData.yStop = (animData.yStop + 8) * glyphBGScale
-		end
-
-		if type(GlyphFrame_StartSlotAnimation) == "function" then
-			hooksecurefunc("GlyphFrame_StartSlotAnimation", function(slotID, duration, size)
-				local sparkle = _G["GlyphFrameSparkle"..slotID]
-				local animation = slotAnimations[slotID]
-
-				sparkle:SetPoint(animation.point, animation.xStart, animation.yStart)
-				sparkle.animGroup.translate:SetOffset(animation.xStop - animation.xStart, animation.yStop - animation.yStart)
-			end)
-		end
-	end
 end)
