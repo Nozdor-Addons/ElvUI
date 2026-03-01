@@ -800,7 +800,7 @@ do
 				end
 			elseif message and (message > ver) then
 				if not E.recievedOutOfDateMessage then
-					E:Print(L["ElvUI is out of date. You can download the newest version from https://github.com/ElvUI-WotLK/ElvUI"])
+					--E:Print(L["ElvUI is out of date. You can download the newest version from https://github.com/ElvUI-WotLK/ElvUI"])
 
 					if message and ((message - ver) >= 0.01) and not InCombatLockdown() then
 						E:StaticPopup_Show("ELVUI_UPDATE_AVAILABLE")

@@ -16,17 +16,37 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 	-- Keep Blizzard's parchment texture; just remove ElvUI's full-frame textures
 	GlyphFrame:StripTextures()
 
+	if not GlyphFrame.backdrop then
+		GlyphFrame:CreateBackdrop("Transparent")
+	end
+	GlyphFrame.backdrop:ClearAllPoints()
+	GlyphFrame.backdrop:Point("TOPLEFT", 11, -12)
+	GlyphFrame.backdrop:Point("BOTTOMRIGHT", -32, 76)
+	S:SetBackdropHitRect(GlyphFrame)
+
+	local function MatchTalentFrameSize()
+		if PlayerTalentFrame then
+			local w, h = PlayerTalentFrame:GetSize()
+			if w and h and w > 0 and h > 0 then
+				GlyphFrame:SetSize(w, h + 127)
+			end
+		end
+	end
+
+	GlyphFrame:HookScript("OnShow", MatchTalentFrameSize)
+	MatchTalentFrameSize()
+
 	-- ==== TUNING ====
 	-- Size of the parchment area (and the layout radius) relative to Blizzard's default
-	local paperScale = 0.97   -- 0.90..0.98 are usually nice
+	local paperScale = 1.5   -- 0.90..0.98 are usually nice
 	-- Size of the glyph buttons relative to default
-	local slotScale  = 0.94   -- keep close to paperScale
+	local slotScale  = 1.07   -- keep close to paperScale
 	-- Vertical nudge for the whole parchment block (helps center it visually)
-	local yOffset    = 6
+	local yOffset    = -9
 	-- =================
 
 	-- Base size used by Blizzard/ElvUI skin in 3.3.5
-	local baseW, baseH = 323, 349
+	local baseW, baseH = 335, 349
 
 	-- Create a real frame to hold parchment + buttons.
 	-- IMPORTANT: Buttons cannot be parented to a Texture, only a Frame.
@@ -94,6 +114,38 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 		end
 	end)
 
+	local function FadeBackdropBG(bd, alpha)
+	if not bd then return end
+	if not bd.__savedGlyphBG then
+		bd.__savedGlyphBG = { bd:GetBackdropColor() }
+	end
+
+	local r, g, b = bd.__savedGlyphBG[1], bd.__savedGlyphBG[2], bd.__savedGlyphBG[3]
+		bd:SetBackdropColor(r, g, b, alpha)
+	end
+
+	local function RestoreBackdropBG(bd)
+		if not bd or not bd.__savedGlyphBG then return end
+		bd:SetBackdropColor(unpack(bd.__savedGlyphBG))
+		bd.__savedGlyphBG = nil
+	end
+
+	local function FadeBackdropBorder(bd, alpha)
+	if not bd then return end
+	if not bd.__savedGlyphBorder then
+		bd.__savedGlyphBorder = { bd:GetBackdropBorderColor() }
+	end
+
+	local r, g, b = bd.__savedGlyphBorder[1], bd.__savedGlyphBorder[2], bd.__savedGlyphBorder[3]
+		bd:SetBackdropBorderColor(r, g, b, alpha)
+	end
+
+	local function RestoreBackdropBorder(bd)
+		if not bd or not bd.__savedGlyphBorder then return end
+		bd:SetBackdropBorderColor(unpack(bd.__savedGlyphBorder))
+		bd.__savedGlyphBorder = nil
+	end
+
 	-- Keep the original ElvUI behavior hiding Talent UI bits while glyph tab is open
 	GlyphFrame:HookScript("OnShow", function()
 		PlayerTalentFrameTitleText:Hide()
@@ -105,6 +157,9 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 		if PlayerTalentFrame.ElvUI_UpdateTalentOffset then
 			PlayerTalentFrame.ElvUI_UpdateTalentOffset(nil, nil, true)
 		end
+		FadeBackdropBG(GlyphFrame.backdrop, 0)
+		FadeBackdropBorder(GlyphFrame.backdrop, 0)
+		-- FadeBackdropBG(PlayerTalentFrame.backdrop, 0)
 	end)
 
 	GlyphFrame:SetScript("OnHide", function()
@@ -115,6 +170,9 @@ S:AddCallbackForAddon("Blizzard_GlyphUI", "Skin_Blizzard_GlyphUI", function()
 		if PlayerTalentFrame.ElvUI_UpdateTalentOffset then
 			PlayerTalentFrame.ElvUI_UpdateTalentOffset(nil, nil, true)
 		end
+		RestoreBackdropBG(GlyphFrame.backdrop)
+		RestoreBackdropBorder(GlyphFrame.backdrop)
+		-- RestoreBackdropBG(PlayerTalentFrame.backdrop)
 	end)
 
 	hooksecurefunc(PlayerTalentFrame, "updateFunction", function()

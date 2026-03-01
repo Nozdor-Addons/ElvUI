@@ -150,6 +150,7 @@ do --this can save some main file locals
 --	local ElvBlue		= E:TextureString(E.Media.ChatLogos.ElvBlue,y)
 --	local ElvPurple		= E:TextureString(E.Media.ChatLogos.ElvPurple,y)
 	local Bronya		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\bronya]], ":24:24")
+	local endmin		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\endmin]], ":24:24")
 	local ElvPink		= E:TextureString(E.Media.ChatLogos.ElvPink,y)
 	local KolbaskaSir = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\KolbaskaSir]], ":24:24")
 	local Pelmen = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\pelmen]], ":24:24")
@@ -165,11 +166,16 @@ do --this can save some main file locals
 		["Усталыч-X5"] = KolbaskaSir,
 		["Fxpw-X5"] = ElvGreen,
 	--	["Альтруист-X5"] = Bronya,
-		["Альтруист-X5"] = Bronya,
+		["Альтруист-X5"] = endmin,
 		["Бульмень-X5"] = Pelmen,
 		["Медич-X5"] = useless,
 		["Вар-X5"] = Koban,
 		["Сова-X5"] = Koban,
+		["Water-X5"] = Koban,
+		["Holywater-X5"] = Koban,
+		["Shooter-X5"] = Koban,
+		["Зоопарк-X5"] = Koban,
+		["Оплот -X5"] = Koban,
 		["Aileen-X5"] = Aileen,
 		["Evilore-X5"] = Paw,
 	}

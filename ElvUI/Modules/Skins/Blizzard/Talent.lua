@@ -103,7 +103,7 @@ do
 		end
 	end
 
-	for i = 1, 4 do
+	for i = 1, 5 do
 		S:HandleTab(_G["PlayerTalentFrameTab"..i])
 	end
 

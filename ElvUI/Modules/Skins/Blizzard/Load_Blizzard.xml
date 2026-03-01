@@ -39,6 +39,7 @@
 	<Script file="Stable.lua"/>
 	<Script file="Tabard.lua"/>
 	<Script file="Talent.lua"/>
+	<Script file="Runes.lua"/>
 	<Script file="Taxi.lua"/>
 	<Script file="Tooltip.lua"/>
 	<Script file="TimeManager.lua"/>
