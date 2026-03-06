@@ -53,7 +53,7 @@ S:AddCallbackForAddon("Blizzard_ItemSocketingUI", "Skin_Blizzard_ItemSocketingUI
 		bg:Kill()
 
 		icon:SetTexCoord(unpack(E.TexCoords))
-		icon:SetInside()
+		icon:SetInside(button, 1, 1)
 
 		shine:SetPoint("CENTER")
 		shine:Size(40)

@@ -158,6 +158,7 @@ do --this can save some main file locals
 	local Koban = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Koban]], ":24:24")
 	local Aileen = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Aileen]], ":24:24")
 	local Paw = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\Paw]], ":24:24")
+	local byak = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\byak]], ":24:24")
 
 	specialChatIcons = {
 		["Крольчонак-x100"] = ElvPink,
@@ -178,7 +179,302 @@ do --this can save some main file locals
 		["Оплот -X5"] = Koban,
 		["Aileen-X5"] = Aileen,
 		["Evilore-X5"] = Paw,
+		["God-X5"] = byak,
+		["Lovely-X5"] = byak,
+		["Sadness-X5"] = byak,
 	}
+
+CH.SpecialChatIconAnims = CH.SpecialChatIconAnims or {
+	["Альтруист-X5"] = {
+		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\aggro]],
+		frames = 20,
+		fps = 15,
+
+		columns = 8, rows = 3,
+		texW = 256, texH = 128,
+		cellW = 32, cellH = 32,
+
+		w = 24, h = 24,
+		xOffset = 0, yOffset = 0,
+	},
+}
+
+do
+	local seq = 0
+	function CH:MakeAnimatedIconMarker()
+		seq = seq + 1
+		if seq > 65535 then seq = 1 end
+		return format("|cFFA0%04X|r", seq)
+	end
+end
+
+local floor = math.floor
+
+local function ParseInlineTexture(iconTag)
+	if not iconTag then return nil end
+	local inner = iconTag:match("|T([^|]+)|t")
+	if not inner then return nil end
+
+	local _, rest = inner:match("^([^:]+):(.*)$")
+	if not rest then
+		return nil
+	end
+
+	local w, h, x, y = rest:match("^(-?%d+):(-?%d+):?(-?%d*):?(-?%d*)")
+	w = tonumber(w)
+	h = tonumber(h)
+	x = tonumber(x) or 0
+	y = tonumber(y) or 0
+
+	if w == 0 then w = nil end
+	if h == 0 then h = nil end
+
+	return w, h, x, y
+end
+
+local function SetSpriteFrame(tex, cfg, index)
+	local frames = cfg.frames or 1
+	if frames <= 1 then
+		tex:SetTexCoord(0, 1, 0, 1)
+		return
+	end
+
+	local cols = cfg.columns or frames
+	local rows = cfg.rows or 1
+
+	if cols < 1 then cols = frames end
+	if rows < 1 then rows = 1 end
+
+	local maxFrames = cols * rows
+	if index > maxFrames then index = maxFrames end
+	if index < 1 then index = 1 end
+
+	local col = (index - 1) % cols
+	local row = floor((index - 1) / cols)
+
+	if cfg.texW and cfg.texH and cfg.cellW and cfg.cellH then
+		local left = (col * cfg.cellW) / cfg.texW
+		local right = ((col + 1) * cfg.cellW) / cfg.texW
+		local top = (row * cfg.cellH) / cfg.texH
+		local bottom = ((row + 1) * cfg.cellH) / cfg.texH
+		tex:SetTexCoord(left, right, top, bottom)
+		return
+	end
+
+	local left = col / cols
+	local right = (col + 1) / cols
+	local top = row / rows
+	local bottom = (row + 1) / rows
+	tex:SetTexCoord(left, right, top, bottom)
+end
+
+local function GetMeasureFS(frame, refFS)
+	if not frame.__elvAnimMeasureFS then
+		frame.__elvAnimMeasureFS = frame:CreateFontString(nil, "OVERLAY")
+		frame.__elvAnimMeasureFS:Hide()
+	end
+
+	local mfs = frame.__elvAnimMeasureFS
+	local font, size, flags = refFS:GetFont()
+	if font then
+		mfs:SetFont(font, size, flags)
+	end
+	return mfs
+end
+
+local function EnsureFSCache(frame)
+	if frame.__elvAnimFS then return end
+
+	frame.__elvAnimFS = {}
+	for i = 1, select("#", frame:GetRegions()) do
+		local region = select(i, frame:GetRegions())
+		if region and region.GetObjectType and region:GetObjectType() == "FontString" and region:GetParent() == frame then
+			frame.__elvAnimFS[#frame.__elvAnimFS + 1] = region
+		end
+	end
+end
+
+
+local REFRESH_DELAY = 0.01
+
+function CH:QueueAnimRefresh(frame)
+	if not (frame and CH and CH.RefreshAnimatedChatIcons) then return end
+	if not frame.__elvAnimHasAny then return end
+	if frame.__elvAnimRefreshScheduled then return end
+	frame.__elvAnimRefreshScheduled = true
+	E:Delay(REFRESH_DELAY, CH.RefreshAnimatedChatIcons, CH, frame)
+end
+
+local function EnsureIconFrame(frame, marker)
+	frame.__elvAnimIconFrames = frame.__elvAnimIconFrames or {}
+	local iconFrame = frame.__elvAnimIconFrames[marker]
+	if iconFrame then return iconFrame end
+
+	iconFrame = CreateFrame("Frame", nil, frame)
+	iconFrame:EnableMouse(false)
+	iconFrame:SetFrameStrata(frame:GetFrameStrata() or "HIGH")
+	iconFrame:SetFrameLevel((frame:GetFrameLevel() or 0) + 50)
+
+	iconFrame.tex = iconFrame:CreateTexture(nil, "OVERLAY")
+	iconFrame.tex:SetAllPoints()
+
+	iconFrame.elapsed = 0
+	iconFrame.frame = 1
+
+	iconFrame:SetScript("OnHide", function(self)
+		self:SetScript("OnUpdate", nil)
+	end)
+
+	frame.__elvAnimIconFrames[marker] = iconFrame
+	return iconFrame
+end
+
+local function AttachToFS(frame, fs, fullText, marker, data)
+	local cfg = data.cfg
+	local iconTag = data.iconTag
+	if not (cfg and cfg.texture and iconTag) then return end
+
+	local iconStart = fullText:find(iconTag, 1, true)
+	if not iconStart then return end
+
+	local prefix = fullText:sub(1, iconStart - 1)
+	local mfs = GetMeasureFS(frame, fs)
+	mfs:SetText(prefix)
+
+	local px = (mfs:GetStringWidth() or 0)
+	local tagW, tagH, tagX, tagY = ParseInlineTexture(iconTag)
+
+	local w = cfg.w or tagW or 24
+	local h = cfg.h or tagH or 24
+
+	local x = px + (tagX or 0) + (cfg.xOffset or 0)
+	local y = (tagY or 0) + (cfg.yOffset or 0)
+
+	local iconFrame = EnsureIconFrame(frame, marker)
+	iconFrame.marker = marker
+	iconFrame.cfg = cfg
+	iconFrame.frames = cfg.frames or 1
+	local fps = cfg.fps or 12
+	if fps <= 0 then fps = 12 end
+	iconFrame.spf = 1 / fps
+
+	iconFrame.__attachedFS = fs
+	iconFrame:ClearAllPoints()
+	iconFrame:SetSize(w, h)
+	iconFrame:SetPoint("LEFT", fs, "LEFT", x, y)
+
+	iconFrame.tex:SetTexture(cfg.texture)
+	SetSpriteFrame(iconFrame.tex, cfg, 1)
+
+	iconFrame.elapsed = 0
+	iconFrame.frame = 1
+	iconFrame:SetAlpha(0)
+	iconFrame.__arm = 2
+	iconFrame:SetScript("OnUpdate", function(self, dt)
+		local afs = self.__attachedFS
+		if not (afs and afs.IsShown and afs:IsShown()) then
+			self:Hide()
+			return
+		end
+
+		local txt = afs:GetText()
+		if not (txt and txt:find(self.marker, 1, true)) then
+			self:Hide()
+			if frame.__elvAnimHasAny and not frame.__elvAnimRefreshScheduled then
+				CH:QueueAnimRefresh(frame)
+			end
+			return
+		end
+
+		if self.__arm then
+			self.__arm = self.__arm - 1
+			if self.__arm <= 0 then
+				self.__arm = nil
+				self:SetAlpha(1)
+			else
+				return
+			end
+		end
+
+		self.elapsed = self.elapsed + dt
+		if self.elapsed < self.spf then return end
+		self.elapsed = self.elapsed - self.spf
+
+		self.frame = self.frame + 1
+		if self.frame > self.frames then self.frame = 1 end
+		SetSpriteFrame(self.tex, self.cfg, self.frame)
+	end)
+
+	iconFrame:Show()
+	data.iconFrame = iconFrame
+end
+
+function CH:QueueAnimatedChatIcon(frame, marker, iconTag, cfg)
+	if not (frame and marker and iconTag and cfg and cfg.texture) then return end
+
+	frame.__elvAnimMarkers = frame.__elvAnimMarkers or {}
+	frame.__elvAnimOrder = frame.__elvAnimOrder or {}
+
+	if not frame.__elvAnimMarkers[marker] then
+		frame.__elvAnimMarkers[marker] = { iconTag = iconTag, cfg = cfg }
+		tinsert(frame.__elvAnimOrder, marker)
+	else
+		frame.__elvAnimMarkers[marker].iconTag = iconTag
+		frame.__elvAnimMarkers[marker].cfg = cfg
+	end
+
+	local maxKeep = (frame.GetMaxLines and frame:GetMaxLines() or 200) + 50
+	while #frame.__elvAnimOrder > maxKeep do
+		local old = tremove(frame.__elvAnimOrder, 1)
+		local oldData = frame.__elvAnimMarkers[old]
+		if oldData and oldData.iconFrame then
+			oldData.iconFrame:Hide()
+		end
+		frame.__elvAnimMarkers[old] = nil
+	end
+
+	frame.__elvAnimHasAny = true
+
+	if not frame.__elvAnimRefreshScheduled then
+		CH:QueueAnimRefresh(frame)
+	end
+end
+
+function CH:RefreshAnimatedChatIcons(frame)
+	if not frame then return end
+	frame.__elvAnimRefreshScheduled = nil
+
+	local markers = frame.__elvAnimMarkers
+	if not markers then return end
+
+	EnsureFSCache(frame)
+
+	local used = frame.__elvAnimUsedMarkers or {}
+	wipe(used)
+
+	for _, fs in ipairs(frame.__elvAnimFS) do
+		local txt = fs:GetText()
+		if txt and txt:find("|cFFA0", 1, true) then
+			for fullMarker in txt:gmatch("(%|cFFA0%x%x%x%x%|r)") do
+				local data = markers[fullMarker]
+				if data then
+					used[fullMarker] = true
+					AttachToFS(frame, fs, txt, fullMarker, data)
+				end
+			end
+		end
+	end
+
+	frame.__elvAnimUsedMarkers = used
+
+	for marker, data in pairs(markers) do
+		if data.iconFrame and not used[marker] then
+			data.iconFrame:Hide()
+			data.iconFrame.__attachedFS = nil
+		end
+	end
+end
+
 end
 
 local function ChatFrame_OnMouseScroll(frame, delta)
@@ -210,6 +506,11 @@ local function ChatFrame_OnMouseScroll(frame, delta)
 
 			frame.ScrollTimer = CH:ScheduleTimer("ScrollToBottom", CH.db.scrollDownInterval, frame)
 		end
+	end
+
+	-- Keep animated icons attached when scrolling (chat lines reflow)
+	if frame.__elvAnimHasAny and CH.RefreshAnimatedChatIcons and not frame.__elvAnimRefreshScheduled then
+		CH:QueueAnimRefresh(frame)
 	end
 end
 
@@ -465,6 +766,12 @@ function CH:AddMessage(msg, infoR, infoG, infoB, infoID, accessID, typeID, extra
 	end
 
 	self.OldAddMessage(self, msg, infoR, infoG, infoB, infoID, accessID, typeID, extraData)
+
+	if self.__elvAnimHasAny and CH.RefreshAnimatedChatIcons then
+		if not self.__elvAnimRefreshScheduled then
+			CH:QueueAnimRefresh(self)
+		end
+	end
 end
 
 function CH:UpdateSettings()
@@ -1126,6 +1433,12 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 			-- Player Flags
 			local pflag, chatIcon, pluginChatIcon = "", specialChatIcons[nameWithRealm], CH:GetPluginIcon(nameWithRealm, name, realm)
 			if type(chatIcon) == "function" then chatIcon = chatIcon() end
+			local animData = (chatIcon and CH.SpecialChatIconAnims and CH.SpecialChatIconAnims[nameWithRealm]) or nil
+			local animMarker, animStaticTag
+			if animData then
+				animStaticTag = animData.staticTag or chatIcon
+				animMarker = CH:MakeAnimatedIconMarker()
+			end
 			if arg6 ~= "" then
 				if arg6 == "GM" then
 					--If it was a whisper, dispatch it to the GMChat addon.
@@ -1145,7 +1458,11 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 			else
 				-- Special Chat Icon
 				if chatIcon then
-					pflag = pflag..chatIcon
+					if animData and animMarker then
+						pflag = pflag..animStaticTag..animMarker
+					else
+						pflag = pflag..chatIcon
+					end
 				end
 				-- Plugin Chat Icon
 				if pluginChatIcon then
@@ -1232,6 +1549,10 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 			end
 
 			frame:AddMessage(body, info.r, info.g, info.b, info.id, false, accessID, typeID, isHistory, historyTime)
+
+			if animData and animMarker then
+				CH:QueueAnimatedChatIcon(frame, animMarker, animStaticTag, animData)
+			end
 
 
 			if not historySavedName and (chatType == "WHISPER" or chatType == "BN_WHISPER") then
