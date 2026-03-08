@@ -164,6 +164,7 @@ E.Media = {
 		useless = M..[[ChatLogos\useless.tga]],
 		Bronya = M..[[ChatLogos\bronya.tga]],
 		endmin = M..[[ChatLogos\endmin.tga]],
+		aggro_s = M..[[ChatLogos\aggro_s.tga]],
 		Koban = M..[[ChatLogos\Koban.tga]],
 		Paw = M..[[ChatLogos\Paw.tga]]
 	},

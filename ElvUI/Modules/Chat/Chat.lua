@@ -151,6 +151,7 @@ do --this can save some main file locals
 --	local ElvPurple		= E:TextureString(E.Media.ChatLogos.ElvPurple,y)
 	local Bronya		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\bronya]], ":24:24")
 	local endmin		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\endmin]], ":24:24")
+	local aggro_s		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\aggro_s]], ":24:24")
 	local ElvPink		= E:TextureString(E.Media.ChatLogos.ElvPink,y)
 	local KolbaskaSir = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\KolbaskaSir]], ":24:24")
 	local Pelmen = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\pelmen]], ":24:24")
@@ -167,7 +168,7 @@ do --this can save some main file locals
 		["Усталыч-X5"] = KolbaskaSir,
 		["Fxpw-X5"] = ElvGreen,
 	--	["Альтруист-X5"] = Bronya,
-		["Альтруист-X5"] = endmin,
+		["Альтруист-X5"] = aggro_s,
 		["Бульмень-X5"] = Pelmen,
 		["Медич-X5"] = useless,
 		["Вар-X5"] = Koban,
@@ -199,6 +200,22 @@ CH.SpecialChatIconAnims = CH.SpecialChatIconAnims or {
 	},
 }
 
+CH.NameReplacementIcons = CH.NameReplacementIcons or {
+	["Альтруист-X5"] = {
+		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\Altruist]],
+		texW = 512, texH = 128,
+		heightFactor = 1.55,
+		widthFactor = 6.2,
+		minH = 18,
+		maxH = 42,
+		minW = 78,
+		maxW = 220,
+		xOffset = 0, yOffset = 0,
+		useBrackets = false,
+		overlay = true,
+	},
+}
+
 do
 	local seq = 0
 	function CH:MakeAnimatedIconMarker()
@@ -209,6 +226,7 @@ do
 end
 
 local floor = math.floor
+local ceil = math.ceil
 
 local function ParseInlineTexture(iconTag)
 	if not iconTag then return nil end
@@ -268,6 +286,17 @@ local function SetSpriteFrame(tex, cfg, index)
 	tex:SetTexCoord(left, right, top, bottom)
 end
 
+local function StripNonRenderedCodesForMeasure(text)
+	if not text or text == "" then return "" end
+
+	text = gsub(text, "|c%x%x%x%x%x%x%x%x", "")
+	text = gsub(text, "|r", "")
+	text = gsub(text, "|H.-|h", "")
+	text = gsub(text, "|h", "")
+
+	return text
+end
+
 local function GetMeasureFS(frame, refFS)
 	if not frame.__elvAnimMeasureFS then
 		frame.__elvAnimMeasureFS = frame:CreateFontString(nil, "OVERLAY")
@@ -282,10 +311,57 @@ local function GetMeasureFS(frame, refFS)
 	return mfs
 end
 
-local function EnsureFSCache(frame)
-	if frame.__elvAnimFS then return end
+local function BuildWidthSpacer(frame, width)
+	if not (frame and width and width > 0) then return "" end
 
-	frame.__elvAnimFS = {}
+	local mfs = frame.__elvAnimMeasureFS
+	if not mfs then
+		mfs = frame:CreateFontString(nil, "OVERLAY")
+		mfs:Hide()
+		frame.__elvAnimMeasureFS = mfs
+	end
+
+	local font, size, flags = frame:GetFont()
+	if font then
+		mfs:SetFont(font, size, flags)
+	end
+
+	mfs:SetText(" ")
+	local spaceWidth = mfs:GetStringWidth() or 0
+	if spaceWidth <= 0 then
+		return "   "
+	end
+
+	local count = ceil(width / spaceWidth)
+	if count < 1 then count = 1 end
+
+	local spacer = strrep(" ", count)
+	mfs:SetText(spacer)
+	local measured = mfs:GetStringWidth() or 0
+
+	while count > 1 and measured > (width + (spaceWidth * 0.5)) do
+		count = count - 1
+		spacer = strrep(" ", count)
+		mfs:SetText(spacer)
+		measured = mfs:GetStringWidth() or 0
+	end
+
+	while measured < (width - (spaceWidth * 0.5)) do
+		count = count + 1
+		spacer = strrep(" ", count)
+		mfs:SetText(spacer)
+		measured = mfs:GetStringWidth() or 0
+	end
+
+	return spacer
+end
+
+_G.BuildWidthSpacer = BuildWidthSpacer
+
+local function EnsureFSCache(frame)
+	frame.__elvAnimFS = frame.__elvAnimFS or {}
+	wipe(frame.__elvAnimFS)
+
 	for i = 1, select("#", frame:GetRegions()) do
 		local region = select(i, frame:GetRegions())
 		if region and region.GetObjectType and region:GetObjectType() == "FontString" and region:GetParent() == frame then
@@ -312,8 +388,8 @@ local function EnsureIconFrame(frame, marker)
 
 	iconFrame = CreateFrame("Frame", nil, frame)
 	iconFrame:EnableMouse(false)
-	iconFrame:SetFrameStrata(frame:GetFrameStrata() or "HIGH")
-	iconFrame:SetFrameLevel((frame:GetFrameLevel() or 0) + 50)
+	iconFrame:SetFrameStrata("DIALOG")
+	iconFrame:SetFrameLevel((frame:GetFrameLevel() or 0) + 200)
 
 	iconFrame.tex = iconFrame:CreateTexture(nil, "OVERLAY")
 	iconFrame.tex:SetAllPoints()
@@ -329,17 +405,47 @@ local function EnsureIconFrame(frame, marker)
 	return iconFrame
 end
 
+local function IsFontStringInsideFrame(frame, fs)
+	if not (frame and fs and frame.IsShown and fs.IsShown and frame:IsShown() and fs:IsShown()) then
+		return false
+	end
+
+	local fsTop = fs:GetTop()
+	local fsBottom = fs:GetBottom()
+	local frameTop = frame:GetTop()
+	local frameBottom = frame:GetBottom()
+	if not (fsTop and fsBottom and frameTop and frameBottom) then
+		return false
+	end
+
+	local pad = 2
+	return fsTop > (frameBottom + pad) and fsBottom < (frameTop - pad)
+end
+
 local function AttachToFS(frame, fs, fullText, marker, data)
 	local cfg = data.cfg
 	local iconTag = data.iconTag
 	if not (cfg and cfg.texture and iconTag) then return end
+
+	if cfg.dynamicSizing and cfg.nameWithRealm then
+		local _, liveCfg = CH:GetNameReplacementIcon(cfg.nameWithRealm, frame)
+		if liveCfg then
+			for key, value in pairs(cfg) do
+				if liveCfg[key] == nil then
+					liveCfg[key] = value
+				end
+			end
+			cfg = liveCfg
+			data.cfg = liveCfg
+		end
+	end
 
 	local iconStart = fullText:find(iconTag, 1, true)
 	if not iconStart then return end
 
 	local prefix = fullText:sub(1, iconStart - 1)
 	local mfs = GetMeasureFS(frame, fs)
-	mfs:SetText(prefix)
+	mfs:SetText(StripNonRenderedCodesForMeasure(prefix))
 
 	local px = (mfs:GetStringWidth() or 0)
 	local tagW, tagH, tagX, tagY = ParseInlineTexture(iconTag)
@@ -351,6 +457,7 @@ local function AttachToFS(frame, fs, fullText, marker, data)
 	local y = (tagY or 0) + (cfg.yOffset or 0)
 
 	local iconFrame = EnsureIconFrame(frame, marker)
+	iconFrame.__ownerFrame = frame
 	iconFrame.marker = marker
 	iconFrame.cfg = cfg
 	iconFrame.frames = cfg.frames or 1
@@ -358,54 +465,90 @@ local function AttachToFS(frame, fs, fullText, marker, data)
 	if fps <= 0 then fps = 12 end
 	iconFrame.spf = 1 / fps
 
+	local sameAttachment = (iconFrame.__attachedFS == fs)
+		and (iconFrame.__targetWApplied == w)
+		and (iconFrame.__targetHApplied == h)
+		and (iconFrame.__targetXApplied == x)
+		and (iconFrame.__targetYApplied == y)
+		and (iconFrame.__texturePath == cfg.texture)
+
 	iconFrame.__attachedFS = fs
-	iconFrame:ClearAllPoints()
-	iconFrame:SetSize(w, h)
-	iconFrame:SetPoint("LEFT", fs, "LEFT", x, y)
+	iconFrame.__misses = 0
+	iconFrame.__stalePasses = 0
 
-	iconFrame.tex:SetTexture(cfg.texture)
-	SetSpriteFrame(iconFrame.tex, cfg, 1)
+	if not sameAttachment then
+		iconFrame:ClearAllPoints()
+		iconFrame:SetSize(w, h)
+		iconFrame:SetPoint("LEFT", fs, "LEFT", x, y)
+		iconFrame.__targetWApplied = w
+		iconFrame.__targetHApplied = h
+		iconFrame.__targetXApplied = x
+		iconFrame.__targetYApplied = y
+	end
 
-	iconFrame.elapsed = 0
-	iconFrame.frame = 1
-	iconFrame:SetAlpha(0)
-	iconFrame.__arm = 2
-	iconFrame:SetScript("OnUpdate", function(self, dt)
-		local afs = self.__attachedFS
-		if not (afs and afs.IsShown and afs:IsShown()) then
-			self:Hide()
-			return
-		end
+	if iconFrame.__texturePath ~= cfg.texture then
+		iconFrame.tex:SetTexture(cfg.texture)
+		iconFrame.__texturePath = cfg.texture
+	end
 
-		local txt = afs:GetText()
-		if not (txt and txt:find(self.marker, 1, true)) then
-			self:Hide()
-			if frame.__elvAnimHasAny and not frame.__elvAnimRefreshScheduled then
-				CH:QueueAnimRefresh(frame)
+	if (not iconFrame:IsShown()) or (not sameAttachment) then
+		iconFrame.elapsed = 0
+		iconFrame.frame = 1
+		SetSpriteFrame(iconFrame.tex, cfg, 1)
+		iconFrame:SetAlpha(1)
+	elseif iconFrame.frame and iconFrame.frame > 0 then
+		SetSpriteFrame(iconFrame.tex, cfg, iconFrame.frame)
+	end
+
+	if not iconFrame:GetScript("OnUpdate") then
+		iconFrame:SetScript("OnUpdate", function(self, dt)
+			local owner = self.__ownerFrame
+			local afs = self.__attachedFS
+			local valid = (afs and afs.IsShown and afs:IsShown())
+
+			if valid then
+				local txt = afs:GetText()
+				valid = txt and txt:find(self.marker, 1, true)
 			end
-			return
-		end
 
-		if self.__arm then
-			self.__arm = self.__arm - 1
-			if self.__arm <= 0 then
-				self.__arm = nil
-				self:SetAlpha(1)
-			else
+			if not valid then
+				self.__misses = (self.__misses or 0) + 1
+				if self.__misses >= 12 then
+					self:SetAlpha(0)
+					if owner and owner.__elvAnimHasAny then
+						self.__detached = true
+					end
+				end
 				return
 			end
-		end
 
-		self.elapsed = self.elapsed + dt
-		if self.elapsed < self.spf then return end
-		self.elapsed = self.elapsed - self.spf
+			self.__misses = 0
+			self.__detached = nil
 
-		self.frame = self.frame + 1
-		if self.frame > self.frames then self.frame = 1 end
-		SetSpriteFrame(self.tex, self.cfg, self.frame)
-	end)
+			local inBounds = IsFontStringInsideFrame(owner, afs)
+			if not self:IsShown() then self:Show() end
+			if inBounds then
+				if self:GetAlpha() < 1 then self:SetAlpha(1) end
+			else
+				if self:GetAlpha() > 0 then self:SetAlpha(0) end
+				return
+			end
 
-	iconFrame:Show()
+			if (self.frames or 1) <= 1 then return end
+
+			self.elapsed = (self.elapsed or 0) + (dt or 0)
+			if self.elapsed < (self.spf or 0.08) then return end
+			self.elapsed = self.elapsed - (self.spf or 0.08)
+
+			self.frame = (self.frame or 1) + 1
+			if self.frame > (self.frames or 1) then self.frame = 1 end
+			SetSpriteFrame(self.tex, self.cfg, self.frame)
+		end)
+	end
+
+	if not iconFrame:IsShown() then
+		iconFrame:Show()
+	end
 	data.iconFrame = iconFrame
 end
 
@@ -453,13 +596,15 @@ function CH:RefreshAnimatedChatIcons(frame)
 	wipe(used)
 
 	for _, fs in ipairs(frame.__elvAnimFS) do
-		local txt = fs:GetText()
-		if txt and txt:find("|cFFA0", 1, true) then
-			for fullMarker in txt:gmatch("(%|cFFA0%x%x%x%x%|r)") do
-				local data = markers[fullMarker]
-				if data then
-					used[fullMarker] = true
-					AttachToFS(frame, fs, txt, fullMarker, data)
+		if fs and fs.IsShown and fs:IsShown() and IsFontStringInsideFrame(frame, fs) then
+			local txt = fs:GetText()
+			if txt and txt:find("|cFFA0", 1, true) then
+				for fullMarker in txt:gmatch("(%|cFFA0%x%x%x%x%|r)") do
+					local data = markers[fullMarker]
+					if data then
+						used[fullMarker] = true
+						AttachToFS(frame, fs, txt, fullMarker, data)
+					end
 				end
 			end
 		end
@@ -468,11 +613,68 @@ function CH:RefreshAnimatedChatIcons(frame)
 	frame.__elvAnimUsedMarkers = used
 
 	for marker, data in pairs(markers) do
-		if data.iconFrame and not used[marker] then
-			data.iconFrame:Hide()
-			data.iconFrame.__attachedFS = nil
+		if data.iconFrame then
+			if used[marker] then
+				data.iconFrame.__stalePasses = 0
+				if data.iconFrame:GetAlpha() < 1 then
+					data.iconFrame:SetAlpha(1)
+				end
+			else
+				data.iconFrame.__stalePasses = (data.iconFrame.__stalePasses or 0) + 1
+				if data.iconFrame.__stalePasses >= 8 then
+					data.iconFrame:SetAlpha(0)
+					data.iconFrame.__attachedFS = nil
+				end
+			end
 		end
 	end
+end
+
+local function NeedsAnimRefresh(frame)
+	local markers = frame and frame.__elvAnimMarkers
+	if not markers then return false end
+
+	EnsureFSCache(frame)
+
+	for _, fs in ipairs(frame.__elvAnimFS or {}) do
+		if fs and fs.IsShown and fs:IsShown() and IsFontStringInsideFrame(frame, fs) then
+			local txt = fs:GetText()
+			if txt and txt:find("|cFFA0", 1, true) then
+				for fullMarker in txt:gmatch("(%|cFFA0%x%x%x%x%|r)") do
+					local data = markers[fullMarker]
+					if data then
+						local iconFrame = data.iconFrame
+						if not iconFrame then
+							return true
+						end
+
+						if iconFrame.__attachedFS ~= fs or (iconFrame:GetAlpha() or 1) <= 0 or iconFrame.__detached then
+							iconFrame.__needsStableCount = (iconFrame.__needsStableCount or 0) + 1
+							if iconFrame.__needsStableCount >= 2 then
+								return true
+							end
+						else
+							iconFrame.__needsStableCount = 0
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+function CH:NeedsAnimRefresh(frame)
+	return NeedsAnimRefresh(frame)
+end
+
+_G.NeedsAnimRefresh = function(frame)
+	if CH and CH.NeedsAnimRefresh then
+		return CH:NeedsAnimRefresh(frame)
+	end
+
+	return NeedsAnimRefresh(frame)
 end
 
 end
@@ -1260,6 +1462,60 @@ function CH:GetPluginIcon(sender, name, realm)
 	return icon
 end
 
+local function ClampValue(value, minValue, maxValue)
+	if minValue and value < minValue then
+		value = minValue
+	end
+	if maxValue and value > maxValue then
+		value = maxValue
+	end
+	return value
+end
+
+function CH:GetNameReplacementIcon(nameWithRealm, frame, placeholderOnly)
+	local cfg = nameWithRealm and CH.NameReplacementIcons and CH.NameReplacementIcons[nameWithRealm]
+	if not (cfg and cfg.texture) then return nil, nil end
+
+	local _, fontSize = frame and frame:GetFont()
+	fontSize = tonumber(fontSize) or 12
+
+	local height = floor((fontSize * (cfg.heightFactor or 1)) + 0.5)
+	height = ClampValue(height, cfg.minH, cfg.maxH)
+
+	local texW = tonumber(cfg.texW) or tonumber(cfg.w) or height
+	local texH = tonumber(cfg.texH) or tonumber(cfg.h) or height
+	if texW <= 0 then texW = height end
+	if texH <= 0 then texH = height end
+
+	local width
+	if cfg.widthFactor then
+		width = floor((fontSize * cfg.widthFactor) + 0.5)
+	else
+		local ratio = texH ~= 0 and (texW / texH) or 1
+		width = floor((height * ratio) + 0.5)
+	end
+
+	width = ClampValue(width, cfg.minW, cfg.maxW)
+
+	local left = tonumber(cfg.left) or 0
+	local right = tonumber(cfg.right) or texW
+	local top = tonumber(cfg.top) or 0
+	local bottom = tonumber(cfg.bottom) or texH
+	local xOffset = placeholderOnly and 0 or (cfg.xOffset or 0)
+	local yOffset = placeholderOnly and 0 or (cfg.yOffset or 0)
+
+	local runtimeCfg = {}
+	for key, value in pairs(cfg) do
+		runtimeCfg[key] = value
+	end
+	runtimeCfg.w = width
+	runtimeCfg.h = height
+	runtimeCfg.nameWithRealm = nameWithRealm
+	runtimeCfg.dynamicSizing = true
+
+	return format("|T%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d|t", cfg.texture, width, height, xOffset, yOffset, texW, texH, left, right, top, bottom), runtimeCfg, width, height
+end
+
 function CH:GetColoredName(event, _, arg2, _, _, _, _, _, arg8, _, _, _, arg12)
 	local chatType = strsub(event, 10)
 	if strsub(chatType, 1, 7) == "WHISPER" then
@@ -1314,6 +1570,21 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 			nameWithRealm = name.."-"..nameWithRealm
 			CH.ClassNames[strlower(name)] = englishClass
 			CH.ClassNames[strlower(nameWithRealm)] = englishClass
+		end
+
+		local nameReplacementIcon, nameReplacementConfig, nameReplacementWidth = CH:GetNameReplacementIcon(nameWithRealm, frame)
+		local nameReplacementMarker, nameReplacementSpacer, nameReplacementText
+		local linkedDisplayName = coloredName
+		local bracketedDisplayName = "["..coloredName.."]"
+		if nameReplacementIcon and nameReplacementConfig and nameReplacementConfig.overlay then
+			nameReplacementMarker = CH:MakeAnimatedIconMarker()
+			nameReplacementSpacer = BuildWidthSpacer(frame, nameReplacementWidth)
+			nameReplacementText = nameReplacementMarker..nameReplacementSpacer
+			linkedDisplayName = nameReplacementText
+			bracketedDisplayName = (nameReplacementConfig.useBrackets and ("["..linkedDisplayName.."]") or linkedDisplayName)
+		elseif nameReplacementIcon then
+			linkedDisplayName = nameReplacementIcon
+			bracketedDisplayName = ((nameReplacementConfig and nameReplacementConfig.useBrackets) and ("["..linkedDisplayName.."]") or linkedDisplayName)
 		end
 
 		local channelLength = strlen(arg4)
@@ -1384,9 +1655,21 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 		elseif strsub(chatType,1,10) == "BG_SYSTEM_" then
 			frame:AddMessage(arg1, info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
 		elseif strsub(chatType,1,11) == "ACHIEVEMENT" then
-			frame:AddMessage(format(arg1, "|Hplayer:"..arg2.."|h".."["..coloredName.."]".."|h"), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			if nameReplacementText then
+				local achievementNameLink = "|Hplayer:"..arg2.."|h"..linkedDisplayName.."|h"
+				local achievementDisplayName = (nameReplacementConfig and nameReplacementConfig.useBrackets) and ("["..achievementNameLink.."]") or achievementNameLink
+				frame:AddMessage(format(arg1, achievementDisplayName), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			else
+				frame:AddMessage(format(arg1, "|Hplayer:"..arg2.."|h"..bracketedDisplayName.."|h"), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			end
 		elseif strsub(chatType,1,18) == "GUILD_ACHIEVEMENT" then
-			frame:AddMessage(format(arg1, "|Hplayer:"..arg2.."|h".."["..coloredName.."]".."|h"), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			if nameReplacementText then
+				local guildAchievementNameLink = "|Hplayer:"..arg2.."|h"..linkedDisplayName.."|h"
+				local guildAchievementDisplayName = (nameReplacementConfig and nameReplacementConfig.useBrackets) and ("["..guildAchievementNameLink.."]") or guildAchievementNameLink
+				frame:AddMessage(format(arg1, guildAchievementDisplayName), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			else
+				frame:AddMessage(format(arg1, "|Hplayer:"..arg2.."|h"..bracketedDisplayName.."|h"), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
+			end
 		elseif chatType == "IGNORED" then
 			frame:AddMessage(format(CHAT_IGNORED, arg2), info.r, info.g, info.b, info.id, false, nil, nil, isHistory, historyTime)
 		elseif chatType == "FILTERED" then
@@ -1502,10 +1785,27 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 				playerLink = "|HBNplayer:"..arg2..":"..arg13..":"..arg11..":"..chatGroup..(chatTarget and ":"..chatTarget or "").."|h"
 			end
 
+			local linkedNameLink = playerLink..linkedDisplayName.."|h"
+			local bracketedLinkedNameLink
+			if nameReplacementText then
+				bracketedLinkedNameLink = (nameReplacementConfig and nameReplacementConfig.useBrackets) and ("["..linkedNameLink.."]") or linkedNameLink
+			else
+				bracketedLinkedNameLink = "["..linkedNameLink.."]"
+			end
+			local usePlainSpeechStyle = nameReplacementText and (chatType == "SAY" or chatType == "YELL")
+
 			if arg3 ~= "" and arg3 ~= "Universal" and arg3 ~= frame.defaultLanguage then
 				local languageHeader = "["..arg3.."] "
 				if showLink and arg2 ~= "" then
-					body = format(_G["CHAT_"..chatType.."_GET"]..languageHeader..arg1, pflag..playerLink.."["..coloredName.."]".."|h")
+					if nameReplacementText then
+						if usePlainSpeechStyle then
+							body = pflag..linkedNameLink..": "..languageHeader..arg1
+						else
+							body = format(_G["CHAT_"..chatType.."_GET"]..languageHeader..arg1, pflag..bracketedLinkedNameLink)
+						end
+					else
+						body = format(_G["CHAT_"..chatType.."_GET"]..languageHeader..arg1, pflag..playerLink..bracketedDisplayName.."|h")
+					end
 				else
 					body = format(_G["CHAT_"..chatType.."_GET"]..languageHeader..arg1, pflag..arg2)
 				end
@@ -1513,12 +1813,24 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 				if not showLink or strlen(arg2) == 0 then
 					body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..arg2, arg2)
 				else
-					if chatType == "EMOTE" then
-						body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..playerLink..coloredName.."|h")
-					elseif chatType == "TEXT_EMOTE" then
-						body = gsub(arg1, arg2, pflag..playerLink..coloredName.."|h", 1)
+					if nameReplacementText then
+						if chatType == "EMOTE" then
+							body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..linkedNameLink)
+						elseif chatType == "TEXT_EMOTE" then
+							body = gsub(arg1, arg2, pflag..linkedNameLink, 1)
+						elseif usePlainSpeechStyle then
+							body = pflag..linkedNameLink..": "..arg1
+						else
+							body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..bracketedLinkedNameLink)
+						end
 					else
-						body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..playerLink.."["..coloredName.."]".."|h")
+						if chatType == "EMOTE" then
+							body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..playerLink..linkedDisplayName.."|h")
+						elseif chatType == "TEXT_EMOTE" then
+							body = gsub(arg1, arg2, pflag..playerLink..linkedDisplayName.."|h", 1)
+						else
+							body = format(_G["CHAT_"..chatType.."_GET"]..arg1, pflag..playerLink..bracketedDisplayName.."|h")
+						end
 					end
 				end
 			end
@@ -1552,6 +1864,10 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 
 			if animData and animMarker then
 				CH:QueueAnimatedChatIcon(frame, animMarker, animStaticTag, animData)
+			end
+
+			if nameReplacementMarker and nameReplacementConfig and nameReplacementConfig.overlay then
+				CH:QueueAnimatedChatIcon(frame, nameReplacementMarker, nameReplacementMarker, nameReplacementConfig)
 			end
 
 
@@ -1653,6 +1969,45 @@ function CH:SetupChat()
 				end
 			end)
 			frame.scriptsSet = true
+		end
+
+		if not frame.__elvAnimHooksSet then
+			frame:HookScript("OnShow", function(self)
+				if self.__elvAnimHasAny and CH.RefreshAnimatedChatIcons and not self.__elvAnimRefreshScheduled then
+					CH:QueueAnimRefresh(self)
+				end
+			end)
+
+			frame:HookScript("OnSizeChanged", function(self)
+				if self.__elvAnimHasAny and CH.RefreshAnimatedChatIcons and not self.__elvAnimRefreshScheduled then
+					CH:QueueAnimRefresh(self)
+				end
+			end)
+
+			frame:HookScript("OnUpdate", function(self, elapsed)
+				if not (self.__elvAnimHasAny and CH.RefreshAnimatedChatIcons and self.IsShown and self:IsShown()) then
+					self.__elvAnimWatchElapsed = 0
+					self.__elvAnimNeedCount = 0
+					return
+				end
+
+				self.__elvAnimWatchElapsed = (self.__elvAnimWatchElapsed or 0) + (elapsed or 0)
+				if self.__elvAnimWatchElapsed < 0.75 then return end
+				self.__elvAnimWatchElapsed = 0
+
+				if CH:NeedsAnimRefresh(self) then
+					self.__elvAnimNeedCount = (self.__elvAnimNeedCount or 0) + 1
+				else
+					self.__elvAnimNeedCount = 0
+				end
+
+				if self.__elvAnimNeedCount >= 2 and not self.__elvAnimRefreshScheduled then
+					self.__elvAnimNeedCount = 0
+					CH:QueueAnimRefresh(self)
+				end
+			end)
+
+			frame.__elvAnimHooksSet = true
 		end
 	end
 
