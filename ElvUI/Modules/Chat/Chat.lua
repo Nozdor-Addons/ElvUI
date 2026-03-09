@@ -152,6 +152,9 @@ do --this can save some main file locals
 	local Bronya		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\bronya]], ":24:24")
 	local endmin		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\endmin]], ":24:24")
 	local aggro_s		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\aggro_s]], ":24:24")
+	local light_s		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\light_s]], ":24:24")
+	local cat_oiiaoiia_s		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\cat_oiiaoiia_s]], ":24:24")
+	local transparent		= E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\transparent]], ":24:24")
 	local ElvPink		= E:TextureString(E.Media.ChatLogos.ElvPink,y)
 	local KolbaskaSir = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\KolbaskaSir]], ":24:24")
 	local Pelmen = E:TextureString([[Interface\AddOns\ElvUI\Media\ChatLogos\pelmen]], ":24:24")
@@ -168,7 +171,7 @@ do --this can save some main file locals
 		["Усталыч-X5"] = KolbaskaSir,
 		["Fxpw-X5"] = ElvGreen,
 	--	["Альтруист-X5"] = Bronya,
-		["Альтруист-X5"] = aggro_s,
+		["Альтруист-X5"] = light_s,
 		["Бульмень-X5"] = Pelmen,
 		["Медич-X5"] = useless,
 		["Вар-X5"] = Koban,
@@ -183,16 +186,30 @@ do --this can save some main file locals
 		["God-X5"] = byak,
 		["Lovely-X5"] = byak,
 		["Sadness-X5"] = byak,
+		["Мышканорушка-X5"] = transparent,
 	}
 
 CH.SpecialChatIconAnims = CH.SpecialChatIconAnims or {
-	["Альтруист-X5"] = {
-		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\aggro]],
-		frames = 20,
-		fps = 15,
+	["Мышкаорушка-X5"] = {
+		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\cat_oiiaoiia]],
+		frames = 22,
+		fps = 17,
 
 		columns = 8, rows = 3,
 		texW = 256, texH = 128,
+		cellW = 32, cellH = 32,
+
+		w = 24, h = 24,
+		xOffset = 0, yOffset = 0,
+	},
+
+	["Альтруист-X5"] = {
+		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\light]],
+		frames = 12,
+		fps = 7,
+
+		columns = 4, rows = 3,
+		texW = 128, texH = 128,
 		cellW = 32, cellH = 32,
 
 		w = 24, h = 24,
