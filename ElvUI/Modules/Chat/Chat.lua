@@ -203,34 +203,34 @@ CH.SpecialChatIconAnims = CH.SpecialChatIconAnims or {
 		xOffset = 0, yOffset = 0,
 	},
 
-	["Альтруист-X5"] = {
-		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\light]],
-		frames = 12,
-		fps = 7,
-
-		columns = 4, rows = 3,
-		texW = 128, texH = 128,
-		cellW = 32, cellH = 32,
-
-		w = 24, h = 24,
-		xOffset = 0, yOffset = 0,
-	},
-}
-
-CH.NameReplacementIcons = CH.NameReplacementIcons or {
-	["Альтруист-X5"] = {
-		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\Altruist]],
-		texW = 512, texH = 128,
-		heightFactor = 1.55,
-		widthFactor = 6.2,
-		minH = 18,
-		maxH = 42,
-		minW = 78,
-		maxW = 220,
-		xOffset = 0, yOffset = 0,
-		useBrackets = false,
-		overlay = true,
-	},
+--	["Альтруист-X5"] = {
+--		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\light]],
+--		frames = 12,
+--		fps = 7,
+--
+--		columns = 4, rows = 3,
+--		texW = 128, texH = 128,
+--		cellW = 32, cellH = 32,
+--
+--		w = 24, h = 24,
+--		xOffset = 0, yOffset = 0,
+--	},
+--}
+--
+--CH.NameReplacementIcons = CH.NameReplacementIcons or {
+--	["Альтруист-X5"] = {
+--		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\Altruist]],
+--		texW = 512, texH = 128,
+--		heightFactor = 1.55,
+--		widthFactor = 6.2,
+--		minH = 18,
+--		maxH = 42,
+--		minW = 78,
+--		maxW = 220,
+--		xOffset = 0, yOffset = 0,
+--		useBrackets = false,
+--		overlay = true,
+--	},
 }
 
 do
