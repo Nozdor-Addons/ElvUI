@@ -190,7 +190,7 @@ do --this can save some main file locals
 	}
 
 CH.SpecialChatIconAnims = CH.SpecialChatIconAnims or {
-	["Мышкаорушка-X5"] = {
+	["Мышканорушка-X5"] = {
 		texture = [[Interface\AddOns\ElvUI\Media\ChatLogos\cat_oiiaoiia]],
 		frames = 22,
 		fps = 17,
