@@ -114,7 +114,7 @@ function E:CheckRole(event)
 
 	if type(self.ClassRole[self.myclass]) == "string" then
 		role = self.ClassRole[self.myclass]
-	elseif talentTree then
+	elseif talentTree and self.ClassRole[self.myclass] then
 		if self.myclass == "DRUID" and talentTree == 2 then
 			role = select(5, GetTalentInfo(talentTree, 22)) > 0 and "Tank" or "Melee"
 		elseif self.myclass == "DEATHKNIGHT" and talentTree == 2 then

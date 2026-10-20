@@ -34,6 +34,10 @@ local function customClassColors()
 			for classToken, color in next, CUSTOM_CLASS_COLORS do
 				colors.class[classToken] = {color.r, color.g, color.b}
 			end
+			-- NOZDOR: CUSTOM_CLASS_COLORS может не знать охотника на демонов
+			if(not colors.class.DEMONHUNTER) then
+				colors.class.DEMONHUNTER = {0.64, 0.19, 0.79}
+			end
 
 			for _, obj in next, oUF.objects do
 				obj:UpdateAllElements('CUSTOM_CLASS_COLORS')
@@ -50,6 +54,9 @@ end
 if(not customClassColors()) then
 	for classToken, color in next, RAID_CLASS_COLORS do
 		colors.class[classToken] = {color.r, color.g, color.b}
+	end
+	if(not colors.class.DEMONHUNTER) then
+		colors.class.DEMONHUNTER = {0.64, 0.19, 0.79}
 	end
 
 	local eventHandler = CreateFrame('Frame')

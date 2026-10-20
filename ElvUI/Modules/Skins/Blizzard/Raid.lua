@@ -55,8 +55,10 @@ S:AddCallbackForAddon("Blizzard_RaidUI", "Skin_Blizzard_RaidUI", function()
 	do
 		local prevButton
 		local button, icon, count, coords
+		local classOrder = CLASS_SORT_ORDER_ALL or CLASS_SORT_ORDER
+		local numClasses = #classOrder
 
-		for index = 1, 13 do
+		for index = 1, numClasses + 3 do
 			button = _G["RaidClassButton"..index]
 			icon = _G["RaidClassButton"..index.."IconTexture"]
 			count = _G["RaidClassButton"..index.."Count"]
@@ -68,7 +70,7 @@ S:AddCallbackForAddon("Blizzard_RaidUI", "Skin_Blizzard_RaidUI", function()
 			button:ClearAllPoints()
 			if index == 1 then
 				button:Point("TOPLEFT", RaidFrame, "TOPRIGHT", -33, -44)
-			elseif index == 11 then
+			elseif index == numClasses + 1 then
 				button:Point("TOP", prevButton, "BOTTOM", 0, -25)
 			else
 				button:Point("TOP", prevButton, "BOTTOM", 0, -5)
@@ -77,17 +79,17 @@ S:AddCallbackForAddon("Blizzard_RaidUI", "Skin_Blizzard_RaidUI", function()
 
 			icon:SetInside()
 
-			if index == 11 then
+			if index == numClasses + 1 then
 				icon:SetTexture("Interface\\RaidFrame\\UI-RaidFrame-Pets")
 				icon:SetTexCoord(unpack(E.TexCoords))
-			elseif index == 12 then
+			elseif index == numClasses + 2 then
 				icon:SetTexture("Interface\\RaidFrame\\UI-RaidFrame-MainTank")
 				icon:SetTexCoord(unpack(E.TexCoords))
-			elseif index == 13 then
+			elseif index == numClasses + 3 then
 				icon:SetTexture("Interface\\RaidFrame\\UI-RaidFrame-MainAssist")
 				icon:SetTexCoord(unpack(E.TexCoords))
 			else
-				coords = CLASS_ICON_TCOORDS[CLASS_SORT_ORDER[index]]
+				coords = CLASS_ICON_TCOORDS[classOrder[index]]
 				icon:SetTexture("Interface\\WorldStateFrame\\Icons-Classes")
 				icon:SetTexCoord(coords[1] + 0.02, coords[2] - 0.02, coords[3] + 0.02, coords[4] - 0.02)
 			end

@@ -52,6 +52,7 @@ local EnglishClassName = {
 	["SHAMAN"] = "Shaman",
 	["WARLOCK"] = "Warlock",
 	["WARRIOR"] = "Warrior",
+	["DEMONHUNTER"] = "Demon Hunter",
 }
 
 local EnglishSpecName = {
@@ -105,6 +106,11 @@ local EnglishSpecName = {
 		"Arms",
 		"Fury",
 		"Protection"
+	},
+	DEMONHUNTER = {
+		"Havoc",
+		"Vengeance",
+		"Devourer"
 	}
 }
 
@@ -112,7 +118,7 @@ local function GetSpecName()
 	local specIdx, specName = E:GetTalentSpecInfo()
 
 	if (specIdx and specIdx ~= 0) and (specName and specName ~= "") then
-		return EnglishSpecName[E.myclass][specIdx]
+		return EnglishSpecName[E.myclass] and EnglishSpecName[E.myclass][specIdx] or specName
 	else
 		return "None"
 	end
@@ -241,7 +247,7 @@ function E:CreateStatusFrame()
 
 	StatusFrame.Section3.Content.Line1.Text:SetFormattedText("Faction: |cff4beb2c%s|r", E.myfaction)
 	StatusFrame.Section3.Content.Line2.Text:SetFormattedText("Race: |cff4beb2c%s|r", E.myrace)
-	StatusFrame.Section3.Content.Line3.Text:SetFormattedText("Class: |cff4beb2c%s|r", EnglishClassName[E.myclass])
+	StatusFrame.Section3.Content.Line3.Text:SetFormattedText("Class: |cff4beb2c%s|r", EnglishClassName[E.myclass] or E.myLocalizedClass)
 	StatusFrame.Section3.Content.Line4.Text:SetFormattedText("Specialization: |cff4beb2c%s|r", GetSpecName())
 	StatusFrame.Section3.Content.Line5.Text:SetFormattedText("Level: |cff4beb2c%s|r", E.mylevel)
 	StatusFrame.Section3.Content.Line6.Text:SetFormattedText("Zone: |cff4beb2c%s|r", GetRealZoneText())

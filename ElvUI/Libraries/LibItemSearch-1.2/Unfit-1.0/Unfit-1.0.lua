@@ -82,6 +82,11 @@ do
 		}
 	elseif Class == 'WARRIOR' then
 		Unusable = {{16}, {}}
+	elseif Class == 'DEMONHUNTER' then
+		Unusable = {
+			{2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16},
+			{4, 5, 6}
+		}
 	else
 		Unusable = {{}, {}}
 	end

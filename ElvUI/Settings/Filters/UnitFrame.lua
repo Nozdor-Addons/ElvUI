@@ -1,7 +1,7 @@
 local E, L, V, P, G = unpack(select(2, ...)); --Import: Engine, Locales, PrivateDB, ProfileDB, GlobalDB
 
 --Lua functions
-local print, unpack = print, unpack
+local pairs, print, unpack = pairs, print, unpack
 --WoW API / Variables
 local GetSpellInfo = GetSpellInfo
 
@@ -234,6 +234,36 @@ G.unitframe.aurafilters.PlayerBuffs = {
 		[SpellName(26297)] = Defaults(), -- Berserking
 	}
 }
+
+-- Demon Hunter (NOZDOR): спеллов нет на стоковом клиенте, поэтому без SpellName
+do
+	local function AddSpells(filter, spells)
+		for id, priority in pairs(spells) do
+			local name = GetSpellInfo(id)
+			if name then
+				filter.spells[name] = Defaults(priority)
+			end
+		end
+	end
+
+	AddSpells(G.unitframe.aurafilters.CCDebuffs, {
+		[179057] = 0, -- Chaos Nova
+		[207684] = 0, -- Sigil of Misery
+		[217832] = 0, -- Imprison
+		[371700] = 0, -- Void Nova
+		[371718] = 0, -- Void Chains
+	})
+	AddSpells(G.unitframe.aurafilters.TurtleBuffs, {
+		[196718] = 0, -- Darkness
+		[198589] = 2, -- Blur
+	})
+	AddSpells(G.unitframe.aurafilters.PlayerBuffs, {
+		[191427] = 0, -- Metamorphosis
+		[196718] = 0, -- Darkness
+		[198589] = 0, -- Blur
+		[371710] = 0, -- Void Metamorphosis
+	})
+end
 
 -- Buffs that really we dont need to see
 G.unitframe.aurafilters.Blacklist = {
@@ -553,6 +583,10 @@ G.unitframe.buffwatch = {
 	},
 	DEATHKNIGHT = {
 		[49016] = ClassBuff(49016, "TOPRIGHT", {0.89, 0.09, 0.05})			-- Hysteria
+	},
+	DEMONHUNTER = {
+		[371125] = ClassBuff(371125, "TOPRIGHT", {0.64, 0.19, 0.79}),		-- Soul Pact
+		[371750] = ClassBuff(371750, "TOPLEFT", {0.4, 0.2, 0.8}),			-- Void Pact
 	},
 	PET = {
 		[1539] = ClassBuff(1539, "TOPLEFT", {0.81, 0.85, 0.1}, true),		-- Feed Pet
