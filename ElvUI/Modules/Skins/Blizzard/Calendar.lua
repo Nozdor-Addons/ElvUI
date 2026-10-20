@@ -7,7 +7,7 @@ local unpack = unpack
 local fmod = math.fmod
 --WoW API / Variables
 local hooksecurefunc = hooksecurefunc
-local CLASS_SORT_ORDER = CLASS_SORT_ORDER
+local CLASS_SORT_ORDER = CLASS_SORT_ORDER_ALL or CLASS_SORT_ORDER
 
 S:AddCallbackForAddon("Blizzard_Calendar", "Skin_Blizzard_Calendar", function()
 	if not E.private.skins.blizzard.enable or not E.private.skins.blizzard.calendar then return end
@@ -203,6 +203,7 @@ S:AddCallbackForAddon("Blizzard_Calendar", "Skin_Blizzard_Calendar", function()
 	CalendarClassButtonContainer:HookScript("OnShow", function()
 		for i, class in ipairs(CLASS_SORT_ORDER) do
 			local button = _G["CalendarClassButton"..i]
+			if not button then break end
 			button:StripTextures()
 			button:CreateBackdrop("Default")
 			button:Size(23)

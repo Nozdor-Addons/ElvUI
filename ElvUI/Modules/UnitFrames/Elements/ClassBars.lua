@@ -332,14 +332,20 @@ function UF:PostUpdateAdditionalPower(_, MIN, MAX, event)
 	local frame = self.origParent or self:GetParent()
 	local db = frame.db
 
-	if frame.USE_CLASSBAR and ((MIN ~= MAX or (not db.classbar.autoHide)) and (event ~= "ElementDisable")) then
+	-- у ДХ это души: прятать пустую полосу, а не полную
+	local isSouls = E.myclass == "DEMONHUNTER"
+	local hasValue = isSouls and MIN ~= 0 or (not isSouls and MIN ~= MAX)
+
+	if frame.USE_CLASSBAR and ((hasValue or (not db.classbar.autoHide)) and (event ~= "ElementDisable")) then
 		if db.classbar.additionalPowerText then
 			local powerValue = frame.Power.value
 			local powerValueText = powerValue:GetText()
 			local powerValueParent = powerValue:GetParent()
 			local powerTextPosition = db.power.position
-			local color = ElvUF.colors.power.MANA
+			local color = isSouls and ElvUF.colors.power.RUNIC_POWER or ElvUF.colors.power.MANA
 			color = E:RGBToHex(color[1], color[2], color[3])
+			local value = isSouls and MIN or floor(MIN / MAX * 100)
+			local valueFormat = isSouls and "%d" or "%d%%"
 
 			--Attempt to remove |cFFXXXXXX color codes in order to determine if power text is really empty
 			if powerValueText then
@@ -357,27 +363,27 @@ function UF:PostUpdateAdditionalPower(_, MIN, MAX, event)
 				if powerValueText and (powerValueText ~= "" and powerValueText ~= " ") then
 					if strfind(powerTextPosition, "RIGHT") then
 						self.text:Point("RIGHT", powerValue, "LEFT", 3, 0)
-						self.text:SetFormattedText(color.."%d%%|r |cffD7BEA5- |r", floor(MIN / MAX * 100))
+						self.text:SetFormattedText(color..valueFormat.."|r |cffD7BEA5- |r", value)
 					elseif strfind(powerTextPosition, "LEFT") then
 						self.text:Point("LEFT", powerValue, "RIGHT", -3, 0)
-						self.text:SetFormattedText("|cffD7BEA5 -|r"..color.." %d%%|r", floor(MIN / MAX * 100))
+						self.text:SetFormattedText("|cffD7BEA5 -|r"..color.." "..valueFormat.."|r", value)
 					else
 						if select(4, powerValue:GetPoint()) <= 0 then
 							self.text:Point("LEFT", powerValue, "RIGHT", -3, 0)
-							self.text:SetFormattedText(" |cffD7BEA5-|r"..color.." %d%%|r", floor(MIN / MAX * 100))
+							self.text:SetFormattedText(" |cffD7BEA5-|r"..color.." "..valueFormat.."|r", value)
 						else
 							self.text:Point("RIGHT", powerValue, "LEFT", 3, 0)
-							self.text:SetFormattedText(color.."%d%%|r |cffD7BEA5- |r", floor(MIN / MAX * 100))
+							self.text:SetFormattedText(color..valueFormat.."|r |cffD7BEA5- |r", value)
 						end
 					end
 				else
 					self.text:Point(powerValue:GetPoint())
-					self.text:SetFormattedText(color.."%d%%|r", floor(MIN / MAX * 100))
+					self.text:SetFormattedText(color..valueFormat.."|r", value)
 				end
 			else
 				self.text:SetParent(frame.RaisedElementParent) -- needs to be 'frame.RaisedElementParent' otherwise the new PowerPrediction Bar will overlap
 				self.text:Point("CENTER", self, 0, 1)
-				self.text:SetFormattedText(color.."%d%%|r", floor(MIN / MAX * 100))
+				self.text:SetFormattedText(color..valueFormat.."|r", value)
 			end
 		else --Text disabled
 			self.text:SetText("")

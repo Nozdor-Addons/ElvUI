@@ -185,6 +185,18 @@ G.unitframe = {
 			},
 			resSpells = {},
 			petSpells = {},
+		},
+		DEMONHUNTER = {
+			enemySpells = {
+				[183752] = true, -- Disrupt (10 yards)
+			},
+			longEnemySpells = {
+				[204157] = true, -- Throw Glaive (30 yards)
+				[371706] = true, -- Consume (Devourer)
+			},
+			friendlySpells = {},
+			resSpells = {},
+			petSpells = {},
 		}
 	}
 }

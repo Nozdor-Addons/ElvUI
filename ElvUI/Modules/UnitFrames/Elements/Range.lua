@@ -27,7 +27,7 @@ end
 function UF:UpdateRangeCheckSpells()
 	if not SRT[E.myclass] then SRT[E.myclass] = {} end
 
-	for tbl, spells in pairs(E.global.unitframe.spellRangeCheck[E.myclass]) do
+	for tbl, spells in pairs(E.global.unitframe.spellRangeCheck[E.myclass] or {}) do
 		AddTable(tbl) --Create the table holding spells, even if it ends up being an empty table
 		for spellID in pairs(spells) do
 			local enabled = spells[spellID]

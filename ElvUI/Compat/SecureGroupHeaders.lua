@@ -474,7 +474,7 @@ function SecureGroupHeader_Update(self)
 			-- filtering by role (of either type)
 			fillTable(tokenTable, strsplit(",", roleFilter));
 			if ( strictFiltering ) then
-				fillTable(tokenTable, 1, 2, 3, 4, 5, 6, 7, 8, unpack(CLASS_SORT_ORDER))
+				fillTable(tokenTable, 1, 2, 3, 4, 5, 6, 7, 8, unpack(CLASS_SORT_ORDER_ALL or CLASS_SORT_ORDER))
 			end
 		
 		else

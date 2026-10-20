@@ -21,7 +21,7 @@ local UnregisterUnitWatch = UnregisterUnitWatch
 local RegisterUnitWatch = RegisterUnitWatch
 local RegisterStateDriver = RegisterStateDriver
 local LOCALIZED_CLASS_NAMES_MALE = LOCALIZED_CLASS_NAMES_MALE
-local CLASS_SORT_ORDER = CLASS_SORT_ORDER
+local CLASS_SORT_ORDER = CLASS_SORT_ORDER_ALL or CLASS_SORT_ORDER
 local MAX_RAID_MEMBERS = MAX_RAID_MEMBERS
 
 local attributeBlacklist = {["showRaid"] = true, ["showParty"] = true, ["showSolo"] = true}

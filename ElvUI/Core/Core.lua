@@ -138,6 +138,12 @@ E.ClassRole = {
 		[1] = "Caster",
 		[2] = "Melee",
 		[3] = "Caster"
+	},
+	DEMONHUNTER = {
+		[0] = "Melee",
+		[1] = "Melee",
+		[2] = "Tank",
+		[3] = "Caster"
 	}
 }
 

@@ -51,7 +51,8 @@ The following options are listed by priority. The first check that returns true 
     self.AdditionalPower = AdditionalPower
 --]]
 
-if(select(2, UnitClass('player')) ~= 'DRUID') then return end
+local playerClass = select(2, UnitClass('player'))
+if(playerClass ~= 'DRUID' and playerClass ~= 'DEMONHUNTER') then return end
 
 local _, ns = ...
 local oUF = ns.oUF
@@ -64,11 +65,22 @@ local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local UnitHasVehicleUI = UnitHasVehicleUI
 local UnitPowerType = UnitPowerType
+local IsSpellKnown = IsSpellKnown
 -- end block
 
 -- sourced from FrameXML/AlternatePowerBar.lua
 local ADDITIONAL_POWER_BAR_NAME = ADDITIONAL_POWER_BAR_NAME or 'MANA'
 local ADDITIONAL_POWER_BAR_INDEX = ADDITIONAL_POWER_BAR_INDEX or 0
+local POWER_EVENT, MAXPOWER_EVENT = 'UNIT_MANA', 'UNIT_MAXMANA'
+
+-- NOZDOR: души Пожирателя лежат в силе рун (6), видны с Метаморфозой Бездны
+local VOID_METAMORPHOSIS = 371710
+local isDemonHunter = playerClass == 'DEMONHUNTER'
+if(isDemonHunter) then
+	ADDITIONAL_POWER_BAR_NAME = 'RUNIC_POWER'
+	ADDITIONAL_POWER_BAR_INDEX = 6
+	POWER_EVENT, MAXPOWER_EVENT = 'UNIT_RUNIC_POWER', 'UNIT_MAXRUNIC_POWER'
+end
 
 local function UpdateColor(self, event, unit, powertype)
 	if(not (unit and unit == 'player') and powertype == ADDITIONAL_POWER_BAR_NAME) then return end
@@ -168,8 +180,8 @@ end
 local function ElementEnable(self)
 	local element = self.AdditionalPower
 
-	self:RegisterEvent('UNIT_MANA', Path)
-	self:RegisterEvent('UNIT_MAXMANA', Path)
+	self:RegisterEvent(POWER_EVENT, Path)
+	self:RegisterEvent(MAXPOWER_EVENT, Path)
 
 	element:Show()
 
@@ -185,8 +197,8 @@ local function ElementEnable(self)
 end
 
 local function ElementDisable(self)
-	self:UnregisterEvent('UNIT_MAXMANA', Path)
-	self:UnregisterEvent('UNIT_MANA', Path)
+	self:UnregisterEvent(MAXPOWER_EVENT, Path)
+	self:UnregisterEvent(POWER_EVENT, Path)
 
 	self.AdditionalPower:Hide()
 
@@ -207,7 +219,9 @@ local function Visibility(self, event, unit)
 	local shouldEnable
 
 	if(not UnitHasVehicleUI('player')) then
-		if((UnitPowerType('player') ~= ADDITIONAL_POWER_BAR_INDEX) and (UnitPowerMax('player', ADDITIONAL_POWER_BAR_INDEX) ~= 0)) then
+		if(isDemonHunter) then
+			shouldEnable = IsSpellKnown(VOID_METAMORPHOSIS)
+		elseif((UnitPowerType('player') ~= ADDITIONAL_POWER_BAR_INDEX) and (UnitPowerMax('player', ADDITIONAL_POWER_BAR_INDEX) ~= 0)) then
 			shouldEnable = true
 		end
 	end
@@ -241,6 +255,9 @@ local function Enable(self, unit)
 		element.ForceUpdate = ForceUpdate
 
 		self:RegisterEvent('UNIT_DISPLAYPOWER', VisibilityPath)
+		if(isDemonHunter) then
+			self:RegisterEvent('SPELLS_CHANGED', VisibilityPath)
+		end
 
 		if(element:IsObjectType('StatusBar') and not element:GetStatusBarTexture()) then
 			element:SetStatusBarTexture([[Interface\TargetingFrame\UI-StatusBar]])
@@ -256,6 +273,9 @@ local function Disable(self)
 		ElementDisable(self)
 
 		self:UnregisterEvent('UNIT_DISPLAYPOWER', VisibilityPath)
+		if(isDemonHunter) then
+			self:UnregisterEvent('SPELLS_CHANGED', VisibilityPath)
+		end
 	end
 end
 
